@@ -41,6 +41,7 @@ library(lattice)
 library(doBy)
 library(expss)
 
+set.seed(67637)
 
 ```
 
@@ -93,15 +94,153 @@ hf=apply_labels(hf,
                 diabetes="diabetes",
                 high_blood_pressure="hipertensio arterial",
                 smoking="fumador")
-cro(hf$anaemia,hf$sex)
-cro(hf$diabetes,hf$sex)
-cro(hf$high_blood_pressure,hf$sex)
-cro(hf$smoking,hf$sex)
-cro(hf$DEATH_EVENT,hf$sex)
-cro(hf$DEATH_EVENT,hf$smoking)
+# cro(hf$anaemia,hf$sex)
+# cro(hf$diabetes,hf$sex)
+# cro(hf$high_blood_pressure,hf$sex)
+# cro(hf$smoking,hf$sex)
+
+cro_rpct(hf$sex, list(hf$anaemia,hf$diabetes,hf$high_blood_pressure,hf$smoking))
+
+
+# cro(hf$DEATH_EVENT,hf$sex)
+# cro(hf$DEATH_EVENT,hf$smoking)
+# 
+# cro(hf$sex,hf$DEATH_EVENT)
+# 
+cro(hf$anaemia,hf$DEATH_EVENT,hf$sex)
+cro(hf$diabetes,hf$DEATH_EVENT,hf$sex)
+cro(hf$high_blood_pressure,hf$DEATH_EVENT,hf$sex)
+cro(hf$smoking,hf$DEATH_EVENT,hf$sex)
+
+
+cro_cpct(hf$DEATH_EVENT,hf$sex, list(hf$anaemia,hf$diabetes,hf$high_blood_pressure,hf$smoking))
+
 
 
 ```
+
+
+Proba: agafo 2 mostres random de 100 homes i 100 dones per veure si hi ha diferencies ja que les poblacions d'homes i dones son molt diferents
+
+
+```{r message=FALSE, warning=FALSE}
+
+ normhf<-rbind(hf[sample(which(hf$sex==0),100),],hf[sample(which(hf$sex==1),100),])
+# hf[sample(which(hf$sex==0),100),]
+normhf
+
+
+str(normhf)
+```
+
+
+taules de contingencia
+```{r message=FALSE, warning=FALSE}
+
+#  normhf=apply_labels(normhf,
+#                 sex="sex",
+#                 sex=c("Female"=0,"Male"=1),
+#                 anaemia="anemia",
+#                 diabetes="diabetes",
+#                 high_blood_pressure="hipertensio arterial",
+#                 smoking="fumador")
+
+
+
+# cro(hf$anaemia,hf$sex)
+# cro(hf$diabetes,hf$sex)
+# cro(hf$high_blood_pressure,hf$sex)
+# cro(hf$smoking,hf$sex)
+
+cro_rpct(normhf$sex, list(normhf$anaemia,normhf$diabetes,normhf$high_blood_pressure,normhf$smoking))
+
+
+# cro(hf$DEATH_EVENT,hf$sex)
+# cro(hf$DEATH_EVENT,hf$smoking)
+# 
+# cro(hf$sex,hf$DEATH_EVENT)
+# 
+cro(hf$anaemia,hf$DEATH_EVENT,hf$sex)
+cro(hf$diabetes,hf$DEATH_EVENT,hf$sex)
+cro(hf$high_blood_pressure,hf$DEATH_EVENT,hf$sex)
+cro(hf$smoking,hf$DEATH_EVENT,hf$sex)
+
+
+cro_cpct(hf$DEATH_EVENT,hf$sex, list(hf$anaemia,hf$diabetes,hf$high_blood_pressure,hf$smoking))
+
+
+
+```
+
+
+
+Prova: agafo 2 mostres random de 50 homes i 50 dones per veure si hi ha diferencies 
+
+
+```{r message=FALSE, warning=FALSE}
+
+ normhf50<-rbind(hf[sample(which(hf$sex==0),50),],hf[sample(which(hf$sex==1),50),])
+# hf[sample(which(hf$sex==0),100),]
+normhf50
+
+
+str(normhf50)
+```
+
+
+taules de contingencia
+```{r message=FALSE, warning=FALSE}
+
+#  normhf=apply_labels(normhf,
+#                 sex="sex",
+#                 sex=c("Female"=0,"Male"=1),
+#                 anaemia="anemia",
+#                 diabetes="diabetes",
+#                 high_blood_pressure="hipertensio arterial",
+#                 smoking="fumador")
+
+
+
+# cro(hf$anaemia,hf$sex)
+# cro(hf$diabetes,hf$sex)
+# cro(hf$high_blood_pressure,hf$sex)
+# cro(hf$smoking,hf$sex)
+
+cro_rpct(normhf50$sex, list(normhf50$anaemia,normhf50$diabetes,normhf50$high_blood_pressure,normhf50$smoking))
+
+
+# cro(hf$DEATH_EVENT,hf$sex)
+# cro(hf$DEATH_EVENT,hf$smoking)
+# 
+# cro(hf$sex,hf$DEATH_EVENT)
+# 
+cro(hf$anaemia,hf$DEATH_EVENT,hf$sex)
+cro(hf$diabetes,hf$DEATH_EVENT,hf$sex)
+cro(hf$high_blood_pressure,hf$DEATH_EVENT,hf$sex)
+cro(hf$smoking,hf$DEATH_EVENT,hf$sex)
+
+
+cro_cpct(hf$DEATH_EVENT,hf$sex, list(hf$anaemia,hf$diabetes,hf$high_blood_pressure,hf$smoking))
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
