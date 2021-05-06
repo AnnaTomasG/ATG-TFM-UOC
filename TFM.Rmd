@@ -76,7 +76,11 @@ str(hf)
 ```
 
 substituim els 0 i 1 per paraules en el vector del sexe per obtenir uns resultats més visuals de les taules de contingencia
+
+S'ha de crear nnou data frame per no interferir amb el estudi de cluster****
 ```{r message=FALSE, warning=FALSE}
+
+
 
 #hf$sex<-replace(hf$sex,hf$sex==0,"Female")
 #hf$sex<-replace(hf$sex,hf$sex==1,"Male")
@@ -84,6 +88,7 @@ substituim els 0 i 1 per paraules en el vector del sexe per obtenir uns resultat
 #head(hf)
 
 ```
+Exploració dades categòriques
 taules de contingencia
 ```{r message=FALSE, warning=FALSE}
 
@@ -225,20 +230,143 @@ cro_cpct(hf$DEATH_EVENT,hf$sex, list(hf$anaemia,hf$diabetes,hf$high_blood_pressu
 
 
 ```
+Una manera de representar les taules de contingencia
+
+```{r message=FALSE, warning=FALSE}
+
+head(hf)
+
+#Bar charts stacked
+ggplot(hf,aes(x=anaemia, fill=sex) )+ geom_bar()
+ggplot(hf,aes(x=diabetes, fill=sex) )+ geom_bar()
+ggplot(hf,aes(x=high_blood_pressure, fill=sex) )+ geom_bar()
+ggplot(hf,aes(x=smoking, fill=sex) )+ geom_bar()
+ggplot(hf,aes(x=DEATH_EVENT, fill=sex) )+ geom_bar()
+
+
+#Bar charts not stacked
+ggplot(hf,aes(x=anaemia, fill=sex) )+ geom_bar(position = "dodge")
+ggplot(hf,aes(x=diabetes, fill=sex) )+ geom_bar(position = "dodge")
+ggplot(hf,aes(x=high_blood_pressure, fill=sex) )+ geom_bar(position = "dodge")
+ggplot(hf,aes(x=smoking, fill=sex) )+ geom_bar(position = "dodge")
+ggplot(hf,aes(x=DEATH_EVENT, fill=sex) )+ geom_bar(position = "dodge")
+
+
+```
+
+Mostrant les proporcions de manera gràfica
+
+
+```{r message=FALSE, warning=FALSE}
+
+ggplot(hf,aes(x=anaemia, fill=sex) )+ geom_bar(position = "fill") + ylab("proportion")
+ggplot(hf,aes(x=diabetes, fill=sex) )+ geom_bar(position = "fill") + ylab("proportion")
+ggplot(hf,aes(x=high_blood_pressure, fill=sex) )+ geom_bar(position = "fill") + ylab("proportion")
+ggplot(hf,aes(x=smoking, fill=sex) )+ geom_bar(position = "fill") + ylab("proportion")
+ggplot(hf,aes(x=DEATH_EVENT, fill=sex) )+ geom_bar(position = "fill") + ylab("proportion")
+
+```
+
+
+Distribucions per a una variable (marginal distribution)
+```{r message=FALSE, warning=FALSE}
+#distribució per a les variables
+ggplot(hf,aes(x=anaemia) )+ geom_bar()
+
+
+#distribució segons sexe
+ggplot(hf,aes(x=anaemia) )+ geom_bar()+facet_wrap(~sex)
+ggplot(hf,aes(x=diabetes) )+ geom_bar()+facet_wrap(~sex)
+ggplot(hf,aes(x=high_blood_pressure) )+ geom_bar()+facet_wrap(~sex)
+ggplot(hf,aes(x=smoking) )+ geom_bar()+facet_wrap(~sex)
+ggplot(hf,aes(x=DEATH_EVENT) )+ geom_bar()+facet_wrap(~sex)
+
+```
+
+Exploració Dades numériques
+
+Faceted histogram
+
+```{r message=FALSE, warning=FALSE}
+head(hf)
+
+ggplot(hf, aes(x = age)) +
+  geom_histogram() +
+  facet_wrap(~ sex)
+
+ggplot(hf, aes(x = creatinine_phosphokinase )) +
+  geom_histogram() +
+  facet_wrap(~ sex)
+
+
+ggplot(hf, aes(x = ejection_fraction )) +
+  geom_histogram() +
+  facet_wrap(~ sex)
+
+ggplot(hf, aes(x = platelets )) +
+  geom_histogram() +
+  facet_wrap(~ sex)
+
+ggplot(hf, aes(x = serum_creatinine )) +
+  geom_histogram() +
+  facet_wrap(~ sex)
+
+ggplot(hf, aes(x = serum_sodium )) +
+  geom_histogram() +
+  facet_wrap(~ sex)
 
 
 
+```
+Perfils similars
+
+Plaquetes augmentar en resposta a una inflamació, anèmia per dèficit de ferro
+
+robar mes combinavions per trobar discrepancies
+```{r message=FALSE, warning=FALSE}
+ggplot(hf, aes(x = platelets )) +
+  geom_histogram() +
+  facet_wrap(~ anaemia)
 
 
 
+ggplot(hf, aes(x = serum_sodium )) +
+  geom_histogram() +
+  facet_wrap(~ anaemia)
+
+ggplot(hf, aes(x = creatinine_phosphokinase )) +
+  geom_histogram() +
+  facet_wrap(~ anaemia)
+
+
+ggplot(hf, aes(x = age )) +
+  geom_histogram() +
+  facet_wrap(~ anaemia)
 
 
 
+ggplot(hf, aes(x = ejection_fraction )) +
+  geom_histogram() +
+  facet_wrap(~ anaemia)
 
 
 
+ggplot(hf, aes(x = age )) +
+  geom_histogram() +
+  facet_wrap(~ anaemia)
+
+```
+
+Clustering jerarquic
+
+Primer es calculen les distancies 
 
 
+```{r message=FALSE, warning=FALSE}
+
+distancies<- dist()
+
+```
 
 
 
