@@ -361,14 +361,54 @@ ggplot(hf, aes(x = age )) +
 
 ### **2. Clustering jerarquic**
 
+Escalem variables
+
+```{r message=FALSE, warning=FALSE}
+
+hfscaled<-scale(hf)
+hfscaled
+
+
+```
+
+
 Primer es calculen les distancies 
+
 
 
 ```{r message=FALSE, warning=FALSE}
 
-distancies<- dist()
+distancies<- dist(hf, method="euclidean")
+
+distanciesscal<-dist(hfscaled, method="euclidean")
 
 ```
+Clusters matriu no escalada
+```{r message=FALSE, warning=FALSE}
+
+clusterH<-hclust(distancies, method = "ward")
+
+plot(clusterH)
+
+```
+
+```{r message=FALSE, warning=FALSE}
+clustergrups<-cutree(clusterH, k=5)
+
+```
+Cluster matriu escalada
+```{r message=FALSE, warning=FALSE}
+
+clusterHS<-hclust(distanciesscal, method = "ward")
+
+plot(clusterHS)
+
+```
+
+
+
+
+
 
 
 
