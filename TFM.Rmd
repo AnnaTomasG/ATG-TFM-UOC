@@ -34,18 +34,14 @@ library(ggplot2)
 
 
 library(stats)
-library(agricolae)
-library(pwr)
-library(mixlm)
 library(lattice)
-library(doBy)
 library(expss)
 
 set.seed(67637)
 
 ```
 
-## Anàlisi exploratori
+#### Anàlisi exploratori
 
 Primer carreguem les dades
 
@@ -88,7 +84,7 @@ S'ha de crear nnou data frame per no interferir amb el estudi de cluster****
 #head(hf)
 
 ```
-Exploració dades categòriques
+### **1.Exploració dades categòriques**
 taules de contingencia
 ```{r message=FALSE, warning=FALSE}
 
@@ -283,7 +279,7 @@ ggplot(hf,aes(x=DEATH_EVENT) )+ geom_bar()+facet_wrap(~sex)
 
 ```
 
-Exploració Dades numériques
+### **2. Exploració Dades numériques**
 
 Faceted histogram
 
@@ -322,7 +318,7 @@ Perfils similars
 
 Plaquetes augmentar en resposta a una inflamació, anèmia per dèficit de ferro
 
-robar mes combinavions per trobar discrepancies
+robar mes convinacions per trobar discrepancies
 ```{r message=FALSE, warning=FALSE}
 ggplot(hf, aes(x = platelets )) +
   geom_histogram() +
@@ -357,7 +353,13 @@ ggplot(hf, aes(x = age )) +
 
 ```
 
-Clustering jerarquic
+####Anàlisi de clusters
+
+
+
+
+
+### **2. Clustering jerarquic**
 
 Primer es calculen les distancies 
 
@@ -378,355 +380,37 @@ boxplot(pres~trat,data=presiones,xlab="Tratamiento",ylab="Presión arterial sist
 
 ```
 
-En el gráfico se puede ver como la media de los grupos va disminuyendo, claramente se reduce la presión arterial cuando se sigue una dieta baja o sin sal y se reduce todavía más con la toma del fármaco. 
 
-Entonces se puede concluir que hay un aparente efecto del tratamiento sobre la presión arterial sistólica medida. 
-
-A continuación se determinará si las diferencias entre los grupos son significativas para decidir si los tratamientos empleados son eficaces contra la hipertensión arterial.
 
 
 ***
 
 
 
-#### **2. Formular el modelo lineal necesario para abordar el problema anterior, detallando todos los parámetros que intervienen y las suposiciones de la modelización.**
+### **2. **
 
 
-El modelo lineal que se debe usar para analizar los datos proporcionados es el siguiente.
+
 
 
 $$\boldsymbol{y_{ij} = \mu + \alpha_i + \epsilon_{ij}}$$
 
-$\boldsymbol{i = 1,...,5}$ es el contador de niveles/tratamientos
-
-$\boldsymbol{j = 1,...,5}$ es el contador de replicas en cada nivel
-
-$\boldsymbol{y_{ij}}$ es la observación 
-
-$\boldsymbol{\mu}$ es la media de los datos
-
-$\boldsymbol{\alpha_i}$ es el efecto del nivel/tratamiento 
-
-$\boldsymbol{\epsilon_{ij}}$ es el error aleatorio de la observación
-
-Se asume que:
-
-- La suma de los efectos para los distintos niveles es 0
-- El error es una variable aleatoria independiente
-- El error sigue una distribución normal de media 0 y varianza $\boldsymbol{\sigma^2}$
-- La varianza del error es constante para todos los niveles (condición de homocedasticidad)
 
 
-***
 
-
-#### **3. Encontrar las estimaciones de los parámetros. **
+#### **3.  **
 
 \underline{Media}
 
-Calculamos la media general de los datos con la función ***mean()***.
-```{r warning=FALSE,message=FALSE}
-mean(pres, data= presiones)
-
-```
-
-
-
-\underline{Efectos de los tratamientos}
-
-Podemos determinar los efectos del factor usando la función ***aov()***, que te ajusta un modelo de forma similar a la función ***lm()***. 
-
-Los resultados nos servirán más adelante para el calculo de la tabla ANOVA y con la comprovación de las suposiciones del modelo.
-
-```{r warning=FALSE,message=FALSE}
-
-efectos<-aov(pres~trat,data=presiones)
-
-model.tables(efectos,type="effects")
-
-```
-
-Se observa que la suma de los efectos es cercana a cero. 
-
-
-
-\underline{Error}
-
-Podemos obtener fácilmente la estimación de la varianza del error a partir de la tabla del análisis de la varianza (ANOVA).
-
-El ANOVA de un factor resuelve el siguiente contraste de hipótesis:
-
-$$H_0\;\;:\;\;\alpha_1 = \alpha_2 = · · · = \alpha_5 = 0$$
-$$H_1\;\;:\;\;\alpha_i \neq \alpha_j\;para\;algún\;i \neq j$$
-
-Las hipotesis planteadas cuestionan si hay algún efecto que sea significativo, es decir que influya en nuestra variable respuesta de manera significativa.  
-
-
-Para calcular la tabla ANOVA se usa la función ***anova()*** con el modelo obtenido arriba.
-
-```{r warning=FALSE,message=FALSE}
-
-tanov<-anova(efectos)
-
-tanov
-
-```
-
-El valor **Mean Sq** (MSE) de los residuales nos da la estimación de la varianza del error.
-$$\sigma^2=44.72$$.
-
-
-
-***
-
-#### **4. ¿Cuáles son las conclusiones que se obtienen de la tabla ANOVA? **
-
-En la tabla ANOVA obtenida en el apartado anterior se observa:
-
-$$p\;value = 6.062\;e^{-05}$$
-
-Es un valor bastante inferior al nivel de significación del 5% (0.05). En este caso se rechaza la hipotesis nula y se concluye que el factor es significativo, el tratamiento afecta al valor medido de la presión arterial. 
-
-
-Se deberán realizar otros contrastes para determinar que niveles del factor son los que realmente influyen en la variable respuesta.
-
-
-***
-
-
-#### **5. Realizar la diagnosis de las suposiciones de modelización. **
-
-Evaluamos el cumplimiento de las suposiciones sobre los errores aleatorios basándonos en los residuos.
-
-Primero comprobamos que los errores siguen una distribución normal.
-Una manera fácil es con el gráfico QQ-Plot, que compara los cuantiles de nuestra distribución con los de la distribución normal de manera visual. 
-
-```{r warning=FALSE,message=FALSE}
-qqnorm(residuals(efectos))
-qqline(residuals(efectos))
-
-```
-Se aprecia que los puntos estan cercanos a la línea, por lo que podemos concluir que los residuos siguen una distribución normal.
-
-
-También se puede complementar el gráfico con el test de contraste de normalidad Shapiro-Wilk. La hipótesis nula confirma la distribución es normal.
-
-```{r warning=FALSE,message=FALSE}
-
-shapiro.test(residuals(efectos))
-```
-
-El $p\;value$ es mayor que 0.05, con lo que se acepta la hipótesis nula. Se concluye ,también, que los errores siguen una distribución normal.
-
-
-Para comprobar que se cumple la condición de homocedasticidad es interesante evaluar el gráfico de los residuales vs. valores ajustados.
-
-```{r warning=FALSE,message=FALSE}
-plot(efectos,which=1)
-
-```
-Cada tira vertical de puntos pertenece a un nivel del factor. Se observa la varianza entre los niveles (lo esparcidos que están los puntos en cada nivel) es parecida.
-
-Realizamos el test de Barlett para la homogeneidad de varianzas. La hipótesis nula establece la homogeneidad de varianzas a través de los niveles.
-
-```{r warning=FALSE,message=FALSE}
-bartlett.test(pres~trat,data=presiones)
-
-```
-El p value es mayor que 0.05, con lo que se acepta la $H_0$. 
-
-Podemos concluir que los residuales cumplen con la condición de homocedasticidad.
-
-***
-
-#### **6. ¿Es pertinente considerar las comparaciones múltiples? En caso afirmativo, realizar las comparaciones múltiples. ¿Qué conclusiones obtienes?**
-
-Es interesante comparar los diferentes niveles para ver realmente los que son significativos y poder extraer conclusiones más detalladas del efecto de los tratamientos en la presión arterial.
-
-Podemos realizar las comparaciones sin usar la corrección de Bonferroni para tener una primera visión de los niveles significativos.
-Usamos la función ***pairwise.t.test()***.
-```{r warning=FALSE,message=FALSE}
-pairwise.t.test(presiones$pres,presiones$trat, p.adj=c("none"))
-
-
-```
-
-Se observa que hay diferencias significativas entre ningun tratamiento y los demás. Los tratamientos con menos sal y sin sal no se diferencian del dosis 1, pero sí del dosis 2. Sin embargo, los dos tratamientos con fármaco no se diferencian entre sí. 
-
-
-A continuación realizamos las comparaciones múltiples con la corrección de Bonferroni usando la función ***LSD.test()***.
-
-
-```{r warning=FALSE,message=FALSE}
-
-LSD.test(efectos,"trat",group=T,p.adj="bonferroni",console=T)
-
-```
-
-En este caso se observa que no hay distinción entre ningún tratamiento y el grupo con menos sal. A su vez, el grupo con menos sal, sin sal y dosis 1 no son significativamente diferentes. Tampoco lo son el grupo sin sal, dosis 1 y dosis dos. Podemos concluir que hay distinción significativa entre el grupo sin ningún tratamiento y los grupos sin sal, dosis 1 y dosis 2.  
-
-
-
-
-***
-
-#### **7. Supongamos que queremos calcular la potencia de una test con la hipótesis nula que las medias de los tratamientos son las mismas contra la hipótesis alternativa que las medias son las observadas en el experimento. ¿Cuál es la potencia?**
-
-$$\phi^2 = \frac{\sum_{i=1}^{a} \alpha_i^2}{a\sigma^2}$$
-
-
-Con los efectos obtenidos anteriormente calculamos $\phi^2$.
-
-
-```{r warning=FALSE,message=FALSE}
-#phi^2
-f2=(14.48^2+2.68^2+0.88^2+(-5.72)^2+(-12.32)^2)/(5*44.72)
-
-#phi
-f=sqrt(f2)
-f 
-
-```
-
-$\boldsymbol{\phi}$ es la medida del efecto.
-
-Realizamos el test de potencia con el valor obtenido.
-
-```{r warning=FALSE,message=FALSE}
-pwr.anova.test(k=5, f=f, sig.level=0.05, n=5)
-
-```
-
-Se obtiene una potencia de 99.92%
-
-***
-
-
-#### **8. ¿Cuál sería el tamaño muestral para detectar efectos que difieran de la media general en 5 unidades de presión con un nivel de significación del 5% y una potencia del 70%?**
-
-$$\phi^2 = \frac{2\Delta^2}{a\sigma^2}$$
-
-Con los valores dados calculamos $\phi$
-
-```{r warning=FALSE,message=FALSE}
-#phi^2
-f2<-(2*5^2)/(5*44.72) #phi^2
-f2
-
-#phi
-f<-sqrt(f2) 
-f
-
-```
-Calculamos el tamaño muestral con el test de potencia usado en el apartado anterior. En este caso indicamos la potencia requerida.
-
-```{r warning=FALSE,message=FALSE}
-pwr.anova.test(k=5, f=f, sig.level=0.05, power=0.7)
-
-```
-
-Vemos que el numero de observaciones por grupo adecuado sería ***n = 10***. 
-
-
-***
-
-## Problema 2
-
-#### **1. ¿Qué concentración de fructosa inicial rinde una producción mayor de celulosa? ¿Es esta producción significativamente mayor que las otras?
-
-Creamos el data frame con los datos proporcionados.
-
-```{r warning=FALSE,message=FALSE}
-celu<- c(200,195,205,198,400,390,410,405,440,435,450,445)
-fruc<-as.factor(c(rep(0.01,4),rep(0.05,4),rep(0.1,4)))
-df <- data.frame(celu,fruc)
-head(df)
-
-```
-
-Realizamos una exploración rápida de los datos para ver a que problema nos enfrentamos.
-
-```{r message=FALSE, warning=FALSE}
-boxplot(celu~fruc,data=df,xlab="Porcentaje fructosa",ylab="Cantidad celulosa húmeda" )
-
-
-```
-
-En el boxplot se observa una gran diferéncia entre los valores de los distintos niveles. Sobre todo entre el grupo con 1% de fructosa inicial en el medio de cultivo y los otros dos. Podemos intuir que el factor tendrá influencia en la variable respuesta.
-
-Comprobamos gráficamente que se cumplen las suposiciones del modelo lineal (aplicamos el mismo que en el apartado anterior). 
-
-```{r warning=FALSE,message=FALSE}
-
-efectos2<-aov(celu~fruc,data=df)
-qqnorm(residuals(efectos2))
-qqline(residuals(efectos2))
-
-```
-Los residuos siguen una distribución normal.
-
-```{r warning=FALSE,message=FALSE}
-plot(efectos2,which=1)
-
-```
-Los residuos cumplen con la condició de homocedasticidad.
-
-
-***
-
-Para saber qué concentración de fructosa inicial rinde una producción mayor de celulosa podemos calcular las medias de los niveles.
-
+***mean()***.
 ```{r warning=FALSE,message=FALSE}
 
 
-model.tables(efectos2,type="means")
-
-```
-La fructosa inicial al 10% produce una mayor cantidad de celulosa, aunque no es demasiado más elevada que la cantidad que produce una fructosa inicial del 5%.  
-
-
-
-Realizamos las comparaciones múltiple para ver si la producción del 10% es significativamente mayor a la del 5%.
-
-```{r warning=FALSE,message=FALSE}
-pairwise.t.test(df$celu,df$fruc, p.adj=c("none"))
-
-
-```
-
-Aunque a simple vista puede parecer que los niveles de 5% y 10% de fructosa inicial producen una cantidad parecida de celulosa, en realidad son dos niveles significativamente diferentes.
-
-
-
-También podemos realizar un test de comparaciones múltiples con la corrección de Bonferroni. 
-
-
-```{r warning=FALSE,message=FALSE}
-
-LSD.test(efectos2,"fruc",group=T,p.adj="bonferroni",console=T)
-
-```
-Comprobamos que hay una distinción significativa entre los 3 niveles. 
-
-
-#### **2. Proporciona un intervalo de confianza al 95% para la producción media de celulosa en la condición óptima de producción.**
-
-
-Podemos obtener los intervalos de confianza con la función ***LSD.test()***.
-
-```{r warning=FALSE,message=FALSE}
-LSD.test(efectos2,"fruc",group=F,p.adj="bonferroni",console=T, alpha = 0.05)
-
 ```
 
 
-En la primera tabla se observan las medias de cada grupo y el correspondiente intervalo de confiança al 95%.
 
-1% fructosa: 
-$$\mu = 442.50$$
-$$Intervalo\;de\;confianza = (434.9902,450.0098)$$
 
-El intervalo no se solapa con los otros grupos.
 
 
 
