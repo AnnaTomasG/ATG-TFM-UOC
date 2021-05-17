@@ -22,26 +22,71 @@ Sys.setenv(LANGUAGE="es")
 
 \pagebreak
 
+
+Llibreries
 ```{r echo=FALSE,warning=FALSE,message=FALSE}
 #Cargamos las librerias que necesitaremos
 
 
 library(knitr)
-library(kableExtra)
+library(rlang)
 library(class)
 
 library(ggplot2)
-
 
 library(stats)
 library(lattice)
 library(expss)
 
-set.seed(67637)
+library(plyr)
+library(sjmisc)
+library(qwraps2)
+library(factoextra)
+library(lifecycle)
+library(fpc)
+library(NbClust)
+library(curl)
+
+library(zip)
+#set.seed(67637)
 
 ```
 
-#### Anàlisi exploratori
+
+###Functions
+
+S'ha creat una funció que calcula el percentatge de supervivencia quan li introdueixes la matriu de dades i el vector de clusters.
+
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+
+get_pos_results<-function(df,cvect){
+  
+
+  for(i in 1:max(cvect)){
+  
+  alive_ind_total <- dim(df[df$DEATH_EVENT==0,])[1]
+  cluster <- df[cvect==i,]
+  ind_cluster <- dim(cluster)[1]
+  alive_ind_cluster <- dim(cluster[cluster$DEATH_EVENT==0,])[1]
+  
+  
+  percentage <- round((alive_ind_cluster/ind_cluster)*100,2)
+
+
+  cat("Cluster number", i, "with a total of", ind_cluster, "individuals, has", alive_ind_cluster, "negative death events (", percentage, "% survival rate) \n")
+
+  }
+  
+  
+  }
+
+```
+
+
+
+
+### Anàlisi exploratori
 
 Primer carreguem les dades
 
@@ -83,9 +128,89 @@ S'ha de crear nnou data frame per no interferir amb el estudi de cluster****
 #hf$sex
 #head(hf)
 
+
 ```
+
+
+Construim una matriu amb les variables binaries com a factors per poder mostrar resultats més endavant
+
+```{r message=FALSE, warning=FALSE}
+
+head(hf)
+
+hf_factor<-hf
+
+
+hf_factor$anaemia<-as.factor(hf_factor$anaemia)
+
+hf_factor$diabetes<-as.factor(hf_factor$diabetes)
+
+hf_factor$high_blood_pressure<-as.factor(hf_factor$high_blood_pressure)
+
+hf_factor$sex<-as.factor(hf_factor$sex)
+
+hf_factor$smoking<-as.factor(hf_factor$smoking)
+
+head(hf_factor)
+
+
+```
+
+Netejem dades
+
+Comprovem si hi ha missing data
+
+```{r message=FALSE, warning=FALSE}
+
+hf[!complete.cases(hf),]
+
+
+
+```
+ 
 ### **1.Exploració dades categòriques**
+
+grafics bivariants
+
+
+```{r message=FALSE, warning=FALSE}
+
+plot(hf)
+plot(hf$ejection_fraction, hf$platelets)
+
+
+```
+
+Convertim la variable EF en un factor 
+
+```{r message=FALSE, warning=FALSE}
+
+#hf$EF<-cut(hf$ejection_fraction,c(0,40,50,100))
+
+#hf$EF
+
+hf$EF2<-cut(hf$ejection_fraction,c(0,40,50,100), labels = c("Reducida", "Limite", "Conservada"))
+hf$EF2
+
+hf$ejection_fraction
+
+hf<-hf[,-14]
+
+```
+
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+plot(hf)
+
+
+```
+
+
 taules de contingencia
+
 ```{r message=FALSE, warning=FALSE}
 
 hf=apply_labels(hf,
@@ -239,6 +364,10 @@ ggplot(hf,aes(x=high_blood_pressure, fill=sex) )+ geom_bar()
 ggplot(hf,aes(x=smoking, fill=sex) )+ geom_bar()
 ggplot(hf,aes(x=DEATH_EVENT, fill=sex) )+ geom_bar()
 
+ggplot(hf,aes(x=DEATH_EVENT, fill=EF2) )+ geom_bar()
+
+
+
 
 #Bar charts not stacked
 ggplot(hf,aes(x=anaemia, fill=sex) )+ geom_bar(position = "dodge")
@@ -246,6 +375,10 @@ ggplot(hf,aes(x=diabetes, fill=sex) )+ geom_bar(position = "dodge")
 ggplot(hf,aes(x=high_blood_pressure, fill=sex) )+ geom_bar(position = "dodge")
 ggplot(hf,aes(x=smoking, fill=sex) )+ geom_bar(position = "dodge")
 ggplot(hf,aes(x=DEATH_EVENT, fill=sex) )+ geom_bar(position = "dodge")
+
+
+ggplot(hf,aes(x=DEATH_EVENT, fill=EF2) )+ geom_bar(position = "dodge")
+
 
 
 ```
@@ -260,6 +393,9 @@ ggplot(hf,aes(x=diabetes, fill=sex) )+ geom_bar(position = "fill") + ylab("propo
 ggplot(hf,aes(x=high_blood_pressure, fill=sex) )+ geom_bar(position = "fill") + ylab("proportion")
 ggplot(hf,aes(x=smoking, fill=sex) )+ geom_bar(position = "fill") + ylab("proportion")
 ggplot(hf,aes(x=DEATH_EVENT, fill=sex) )+ geom_bar(position = "fill") + ylab("proportion")
+
+ggplot(hf,aes(x=DEATH_EVENT, fill=EF2) )+ geom_bar(position = "fill") + ylab("proportion")
+
 
 ```
 
@@ -276,6 +412,12 @@ ggplot(hf,aes(x=diabetes) )+ geom_bar()+facet_wrap(~sex)
 ggplot(hf,aes(x=high_blood_pressure) )+ geom_bar()+facet_wrap(~sex)
 ggplot(hf,aes(x=smoking) )+ geom_bar()+facet_wrap(~sex)
 ggplot(hf,aes(x=DEATH_EVENT) )+ geom_bar()+facet_wrap(~sex)
+ggplot(hf,aes(x=DEATH_EVENT) )+ geom_bar()
+
+
+ggplot(hf,aes(x=DEATH_EVENT) )+ geom_bar()+facet_wrap(~EF2)
+
+ggplot(hf,aes(x=EF2) )+ geom_bar()+facet_wrap(~DEATH_EVENT)
 
 ```
 
@@ -312,13 +454,13 @@ ggplot(hf, aes(x = serum_sodium )) +
   facet_wrap(~ sex)
 
 
-
 ```
+
 Perfils similars
 
 Plaquetes augmentar en resposta a una inflamació, anèmia per dèficit de ferro
 
-robar mes convinacions per trobar discrepancies
+trobar mes convinacions per trobar discrepancies
 ```{r message=FALSE, warning=FALSE}
 ggplot(hf, aes(x = platelets )) +
   geom_histogram() +
@@ -353,23 +495,846 @@ ggplot(hf, aes(x = age )) +
 
 ```
 
-####Anàlisi de clusters
+Boxplots
+
+```{r message=FALSE, warning=FALSE}
+
+
+boxplot(hf_varcont)
+
+
+boxplot(hf_varcont[,-c(4,2)])
+
+
+boxplot(hf_varcont[,4])
+boxplot(hf_varcont[,2])
+
+boxplot(hf_varcont[,5])
+
+for(i in 1:dim(hf)[2]){
+  boxplot(hf[,i])
+  title(names(hf)[i])
+}
+
+out_crephos<-boxplot.stats(hf$creatinine_phosphokinase)$out
+out_crephos_ind<-which(hf$creatinine_phosphokinase %in% c(out_crephos))
+hf[out_crephos_ind,]
+summary(hf[out_crephos_ind,])
+
+#anemia boxplots
+
+ggplot(hf_factor, aes(x = hf_factor$anaemia, y = hf_factor$ejection_fraction)) +
+  geom_boxplot()
+
+ggplot(hf_factor, aes(x = hf_factor$anaemia, y = hf_factor$age)) +
+  geom_boxplot()
+ggplot(hf_factor, aes(x = hf_factor$anaemia, y = hf_factor$creatinine_phosphokinase)) +
+  geom_boxplot()
+
+
+
+ggplot(hf_factor, aes(x = hf_factor$anaemia, y = hf_factor$platelets)) +
+  geom_boxplot()
+
+
+ggplot(hf_factor, aes(x = hf_factor$anaemia, y = hf_factor$serum_creatinine)) +
+  geom_boxplot()
+ggplot(hf_factor, aes(x = hf_factor$anaemia, y = hf_factor$serum_sodium)) +
+  geom_boxplot()
+
+
+
+ggplot(hf, aes(x = hf$ejection_fraction, fill = as.factor(hf$anaemia))) +
+  geom_density(alpha = .2)
+
+ggplot(hf, aes(x = hf$age, fill = as.factor(hf$anaemia))) +
+  geom_density(alpha = .2)
+
+
+
+ggplot(hf, aes(x = hf$age, fill = as.factor(hf$high_blood_pressure))) +
+  geom_density(alpha = .2)
+
+
+head(hf)
+
+
+
+ggplot(hf, aes(x = hf$age, fill = as.factor(hf$high_blood_pressure))) +
+  geom_density(alpha = .2)
+
+
+#densitat death event (interesant)
+
+
+ggplot(hf, aes(x = hf$creatinine_phosphokinase, fill = as.factor(hf$DEATH_EVENT))) +
+  geom_density(alpha = .2)
+
+ggplot(hf, aes(x = hf$age, fill = as.factor(hf$DEATH_EVENT))) +
+  geom_density(alpha = .2)
+
+
+ggplot(hf, aes(x = hf$serum_sodium, fill = as.factor(hf$DEATH_EVENT))) +
+  geom_density(alpha = .2)
+
+ggplot(hf, aes(x = hf$ejection_fraction, fill = as.factor(hf$DEATH_EVENT))) +
+  geom_density(alpha = .2)
+
+
+ggplot(hf, aes(x = hf$platelets, fill = as.factor(hf$DEATH_EVENT))) +
+  geom_density(alpha = .2)
+
+ggplot(hf, aes(x = hf$serum_creatinine, fill = as.factor(hf$DEATH_EVENT))) +
+  geom_density(alpha = .2)
+
+ggplot(hf, aes(x = hf$time, fill = as.factor(hf$DEATH_EVENT))) +
+  geom_density(alpha = .2)
+
+
+#densitat Sex (no diu res)
+
+ggplot(hf, aes(x = hf$creatinine_phosphokinase, fill = as.factor(hf$sex))) +
+  geom_density(alpha = .2)
+
+ggplot(hf, aes(x = hf$age, fill = as.factor(hf$sex))) +
+  geom_density(alpha = .2)
+
+
+ggplot(hf, aes(x = hf$serum_sodium, fill = as.factor(hf$sex))) +
+  geom_density(alpha = .2)
+
+ggplot(hf, aes(x = hf$ejection_fraction, fill = as.factor(hf$sex))) +
+  geom_density(alpha = .2)
+
+
+ggplot(hf, aes(x = hf$platelets, fill = as.factor(hf$sex))) +
+  geom_density(alpha = .2)
+
+ggplot(hf, aes(x = hf$serum_creatinine, fill = as.factor(hf$sex))) +
+  geom_density(alpha = .2)
+
+ggplot(hf, aes(x = hf$time, fill = as.factor(hf$sex))) +
+  geom_density(alpha = .2)
+
+
+#altres comparacions
+
+
+ggplot(hf, aes(x = hf$platelets, fill = as.factor(hf$anaemia))) +
+  geom_density(alpha = .2) #No s'observa gran relacio entre les variables
+
+
+ggplot(hf, aes(x = hf$serum_sodium, fill = as.factor(hf$high_blood_pressure))) +
+  geom_density(alpha = .2) #No s'observa gran relacio entre les variables
+
+
+
+
+```
+
+
+
+
+###Anàlisi de clusters amb tota la matriu
+
+
+```{r message=FALSE, warning=FALSE}
+
+head(hf)
+
+
+```
+
+Escalem variables (a cada observació li resta la mitjana i la divideix per la desviació estandard)
+
+s'ha de fer ja que les variables estan mesurades en escales molt diferents.
+
+```{r message=FALSE, warning=FALSE}
+
+
+
+hfscaled<-scale(hf)
+head(hfscaled)
+
+
+
+```
+
+
+
+#### **1. k-means**
+
+S'han d'utilitzar només les variables numériques. Treiem les binaries.
+
+```{r message=FALSE, warning=FALSE}
+
+hfNscaled<-hfscaled[,-c(2,4,6,10,11,13)]
+head(hfNscaled)
+```
+
+
+
+
+**Calculem k-means utilitzant funció kmeans()**
+
+
+
+k=3
+```{r message=FALSE, warning=FALSE}
+
+fitK<-kmeans(hfNscaled,3,nstart=50)
+
+fitK
+
+#plot(hf, col=fitK$cluster)
+
+get_pos_results(hf,fitK$cluster)
+
+```
+
+
+k=2
+```{r message=FALSE, warning=FALSE}
+
+fitK<-kmeans(hfNscaled,2,nstart=50)
+
+fitK
+
+#plot(hf, col=fitK$cluster)
+
+get_pos_results(hf,fitK$cluster)
+
+```
+
+
+
+
+Probem k-means per diferents valors de k, mostrem summary per cada cluster en cada moment per poder veure les característiques de les variables en cada cluster.
+
+```{r message=FALSE, warning=FALSE}
+
+for(k in 1:5){
+  
+  fitK <- kmeans(hfNscaled,k,nstart=50)
+  
+  cat("k =", k,"\n")
+  
+  get_pos_results(hf,fitK$cluster)
+  
+  
+  for(c in 1:k){
+    cat("Cluster =",c,"\n")
+    print(summary(hf[fitK$cluster==c,]))
+    
+  }
+}
+
+
+
+```
+
+
+
+Trobem la k adequada amb un **for**:
+
+representem betweenss/totss
+
+betweenss:  is the average of the square distances between the centroids
+totss: The total sum of squares ($tot.withinss + $betweenss), variabilitat total
+
+
+```{r message=FALSE, warning=FALSE}
+
+k<-list()
+for(i in 1:20){
+  k[[i]]<-kmeans(hfNscaled,i)
+}
+
+
+betweenss_totss<-list()
+for(i in 1:20){
+  betweenss_totss[[i]]<-k[[i]]$betweenss/k[[i]]$totss
+  
+}
+
+plot(1:20,betweenss_totss, type="b", ylab="Between SS / Total SS", xlab="Clusters(k)")
+```
+
+
+Quina es la k adequada? 4, pero no es veu molt clar
+
+
+Realitzem un altre gràfic utilitzant el valor de **total within-cluster sum of square (WSS)**
+WWS, mesura com de compcates son els clusters, es vol que sigui el mes petit possible, el que significara que son molt compactes.
+
+Aquest metode s'anomena Elbow method.
+
+```{r message=FALSE, warning=FALSE}
+# Elbow method
+fviz_nbclust(hfNscaled, kmeans, method = "wss") +
+    geom_vline(xintercept = 4, linetype = 2)+
+  labs(subtitle = "Elbow method")
+
+```
 
 
 
 
 
-### **2. Clustering jerarquic**
+Average Silhouette method: mesura la qualitat del cluster veient com de bé està classificada cada observació en el seu cluster, volem que l'index es maximitzi
+
+```{r message=FALSE, warning=FALSE}
+# Silhouette method
+fviz_nbclust(hfNscaled, kmeans, method = "silhouette")+
+  labs(subtitle = "Silhouette method")
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+
+# Gap statistic
+
+set.seed(123)
+fviz_nbclust(hfNscaled, kmeans, nstart = 25,  method = "gap_stat", nboot = 100)+
+  labs(subtitle = "Gap statistic method")
+
+```
+# Elbow method, # Silhouette method i # Gap statistic donen resultats molt dispars, escollim k=4
+
+
+reultats per k=4
+
+
+```{r message=FALSE, warning=FALSE}
+
+fitK<-kmeans(hfNscaled,4,nstart=50)
+
+#fitK
+
+#plot(hf, col=fitK$cluster)
+
+#grafic
+
+fviz_cluster(fitK,data=hfNscaled, geom = "point", ellipse.type = "norm", palette= "jco", ggtheme = theme_minimal())+labs(subtitle = "k-means")
+
+
+```
+
+
+
+
+
+
+
+
+
+**For** per representar els clusters obtinguts amb diferents k.
+
+```{r message=FALSE, warning=FALSE}
+
+runs<-list()
+for(i in 1:3){
+  runs[[i]]<-kmeans(hfNscaled,i)
+  
+  #plot(hf, col=runs[[i]]$cluster)
+}
+
+
+
+```
+
+
+
+
+**Calculem k-means utilitzant funció eclust()** **I es realitza la validació dels clusters**
+
+També es pot calcular k-means amb la funció eclust().
+
+
+k=4
+
+```{r message=FALSE, warning=FALSE}
+
+#K-means algorithm
+
+km.res<-eclust(hfNscaled, "kmeans", k=4, nstart=50, graph = F )
+
+#Clustering visualization
+
+fviz_cluster(km.res, geom = "point", ellipse.type = "norm", palette= "jco", ggtheme = theme_minimal())
+```
+
+**External clustering Validation*
+
+```{r message=FALSE, warning=FALSE}
+
+
+#cross-tabulation entre k-means i variable death_event (EXTERNAL CLUSTERING VALIDATION)
+
+table(hf$DEATH_EVENT, km.res$cluster)
+
+
+#Corrected Rand index (EXTERNAL CLUSTERING VALIDATION)
+
+
+clust_stats <- cluster.stats(d = dist(hfNscaled), 
+                             hf$DEATH_EVENT, km.res$cluster)
+
+
+clust_stats$corrected.rand
+
+clust_stats$vi
+
+```
+
+Rand index: Its range is -1 (no agreement) to 1 (perfect agreement). 
+
+
+
+
+
+
+Silhouette plot per clustering validation (Numeric variables, k-means)
+
+
+```{r message=FALSE, warning=FALSE}
+require("cluster")
+
+sil<-silhouette(km.res$cluster,dist(hfNscaled))
+
+fviz_silhouette(sil,label=FALSE,print.summary = FALSE)
+
+#get_pos_results(hf,km.res$cluster)
+
+```
+
+
+
+**Calculem els clusters per diferents k amb la funció eclust (Num variables, variables escalades)**
+
+```{r message=FALSE, warning=FALSE}
+
+for(i in 2:10){
+  
+  km.res<-eclust(hfNscaled, "kmeans", k=i, nstart=25, graph = F )
+
+  print(fviz_cluster(km.res, geom = "point", ellipse.type = "norm", palette= "jco", ggtheme = theme_minimal()))
+
+  require("cluster")
+  
+  sil <- silhouette(km.res$cluster,dist(hfNscaled))
+
+  print(fviz_silhouette(sil,label=FALSE,print.summary = FALSE))
+  
+  cat("k =", i,"\n")
+
+  get_pos_results(hf,km.res$cluster)
+  
+  #cross-tabulation entre k-means i variable death_event (EXTERNAL CLUSTERING VALIDATION)
+  
+  print(table(hf$DEATH_EVENT, km.res$cluster))
+ 
+#Corrected Rand index (EXTERNAL CLUSTERING VALIDATION)
+
+
+clust_stats <- cluster.stats(d = dist(hfNscaled), 
+                             hf$DEATH_EVENT, km.res$cluster)
+
+
+print(clust_stats$corrected.rand)
+
+print(clust_stats$vi)
+    
+  }
+
+
+```
+
+
+
+
+
+#### **2. Clustering jerarquic**
+
+
+
+
+Primer es calculen les distancies 
+
+
+```{r message=FALSE, warning=FALSE}
+
+distancies<-dist(hfNscaled, method="euclidean")
+
+```
+
+Clusters matriu no escalada - Separa per la variable Platelets (Plaquetes), que es la variable més gran, no és útil
+```{r message=FALSE, warning=FALSE}
+
+#clusterH<-hclust(distancies, method = "ward")
+
+#plot(clusterH)
+
+```
+
+```{r message=FALSE, warning=FALSE}
+#clustergrups<-cutree(clusterH, k=5)
+
+#plot(hf, col=clustergrups)
+
+```
+
+
+Cluster matriu escalada
+```{r message=FALSE, warning=FALSE}
+
+fitHS<-hclust(distancies, method = "ward")
+
+#plot(fitHS)
+#rect.hclust(fitHS, k=5, border = "red")
+
+fitHS2 <- hcut(hfNscaled, k = 3, hc_method = "complete")
+
+#plot(fitHS)
+#rect.hclust(fitHS, k=3, border = "red")
+
+
+#grafic
+fviz_dend(fitHS, cex = 0.5)
+
+```
+
+Escollim on tallar el dendograma
+
+```{r message=FALSE, warning=FALSE}
+
+fviz_nbclust(hfNscaled,hcut , method = "wss") +
+    geom_vline(xintercept = 3, linetype = 2)+
+  labs(subtitle = "Elbow method")
+
+fviz_nbclust(hfNscaled, hcut, method = "silhouette") +
+  labs(subtitle = "Silhouette method")
+
+# fviz_nbclust(hfNscaled, hcut, nstart = 25,  method = "gap_stat", nboot = 2)+
+#   labs(subtitle = "Gap statistic method")
+
+
+```
+
+
+Escollim 3 clusters
+
+```{r message=FALSE, warning=FALSE}
+clusters<-cutree(fitHS, k=3)
+
+#estadistiques per cada cluster
+
+get_pos_results(hf,clusters)
+
+for(c in 1:3){
+    cat("Cluster =",c,"\n")
+    for(i in 1:13){
+      cat(names(hf)[i])
+      cat("\n")
+      cat("mean: ",mean(hf[clusters==c,i])[1])
+      cat("\n")
+      cat("min: ",min(hf[clusters==c,i])[1])
+      cat("\n")
+      cat("max: ",max(hf[clusters==c,i])[1])
+      cat("\n")
+      cat("\n")
+    }
+}
+
+
+```
+
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+
+#plot(hf, col=clusters)
+
+plot(fitHS)
+rect.hclust(fitHS, k=3, border = "red")
+
+fviz_dend(fitHS, k = 3, 
+ k_colors = c("#1B9E77", "#D95F02", "#7570B3"))
+
+# fviz_dend(fitHS, cex = 0.5, k = 3, color_labels_by_k = TRUE)
+
+#fviz_cluster(fitHS2, hf, stand = FALSE, geom = "point")
+
+```
+
+
+
+
+**Calcul utilitzant funció eclust()**
+
+
+```{r message=FALSE, warning=FALSE}
+
+library(viridisLite)
+
+#Hierarchical cluster algorithm
+
+hc.res <- eclust(hfNscaled, "hclust", k = 2, hc_metric = "euclidean", hc_method = "ward.D2", graph = FALSE)
+
+#Clustering visualization
+
+fviz_dend(hc.res, show_labels = FALSE, palette = "jco", as.ggplot = TRUE)
+
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+
+
+#Hierarchical cluster algorithm
+
+hc.res <- eclust(hfNscaled, "hclust", k = 4, hc_metric = "euclidean", hc_method = "ward.D2", graph = FALSE)
+
+#Clustering visualization
+
+fviz_dend(hc.res, show_labels = FALSE, palette = "jco", as.ggplot = TRUE)
+
+require("cluster")
+
+sil<-silhouette(hc.res$cluster,dist(hfscaledR))
+
+fviz_silhouette(sil,label=FALSE,print.summary = FALSE)
+
+
+```
+
+
+
+
+*EXTERNAL CLUSTERING VALIDATION*
+
+```{r message=FALSE, warning=FALSE}
+
+
+
+#cross-tabulation entre h clus i variable death_event (EXTERNAL CLUSTERING VALIDATION)
+
+table(hf$DEATH_EVENT, hc.res$cluster)
+
+
+#Corrected Rand index (EXTERNAL CLUSTERING VALIDATION)
+
+
+clust_stats <- cluster.stats(d = dist(hfscaled), 
+                             hf$DEATH_EVENT, hc.res$cluster)
+
+
+clust_stats$corrected.rand
+
+clust_stats$vi
+
+```
+
+
+
+
+
+
+
+
+
+
+#### **3.PAM **
+
+hfscaled
+
+```{r message=FALSE, warning=FALSE}
+
+hfscaledR<-scale(hf[,-13])
+head(hfscaledR)
+
+
+
+```
+
+Escollim k
+```{r message=FALSE, warning=FALSE}
+
+fviz_nbclust(hfscaled, pam, method = "wss") +
+    geom_vline(xintercept = 3, linetype = 2)+
+  labs(subtitle = "Elbow method")
+
+fviz_nbclust(hfscaled, pam, method = "silhouette") +
+  labs(subtitle = "Silhouette method")
+
+# fviz_nbclust(hfscaled, pam, nstart = 25,  method = "gap_stat", nboot = 2)+
+#   labs(subtitle = "Gap statistic method")
+
+
+```
+
+
+apliquem l'algoritme PAM
+
+```{r message=FALSE, warning=FALSE}
+
+pam.res <- pam(hfscaled, 3, metric = "manhattan")
+# print(pam.res)
+
+```
+
+gràfic i resultats per k=4
+
+```{r message=FALSE, warning=FALSE}
+fviz_cluster(pam.res, geom = "point", ellipse.type = "norm", palette= "jco", ggtheme = theme_minimal())+labs(subtitle = "PAM")
+
+get_pos_results(hf,pam.res$clustering)
+
+for(c in 1:3){
+    cat("Cluster =",c,"\n")
+    # print(summary(hf[pam.res$clustering==c,]))
+    for(i in 1:13){
+      cat(names(hf)[i])
+      cat("\n")
+      cat("mean: ",mean(hf[pam.res$clustering==c,i])[1])
+      cat("\n")
+      cat("min: ",min(hf[pam.res$clustering==c,i])[1])
+      cat("\n")
+      cat("max: ",max(hf[pam.res$clustering==c,i])[1])
+      cat("\n")
+      cat("\n")
+    }
+    }
+
+
+```
+
+
+
+
+#### **4.CLARA **
+
+```{r message=FALSE, warning=FALSE}
+
+fviz_nbclust(hfscaled, clara, method = "wss") +
+    geom_vline(xintercept = 4, linetype = 2)+
+  labs(subtitle = "Elbow method")
+
+fviz_nbclust(hfscaled, clara, method = "silhouette") +
+  labs(subtitle = "Silhouette method")
+
+# fviz_nbclust(hfscaled, clara, nstart = 25,  method = "gap_stat", nboot = 2)+
+#   labs(subtitle = "Gap statistic method")
+
+clara.res <- clara(hfscaled, 2, metric = "manhattan", stand = FALSE, 
+      samples = 500, pamLike = FALSE)
+print(clara.res)
+
+fviz_cluster(clara.res, geom = "point", ellipse.type = "norm", palette= "jco", ggtheme = theme_minimal())
+
+
+```
+S'obtenen pitjors resultats que amb el PAM
+
+###Anàlisi de clusters estratificat
+
+Homes/Dones
+
+
+
+
+
+
+###Anàlisi de clusters amb les variables continues (CREC QUE ES MILLOR FERHO AMB TOTA LA MATRIU)
+
+```{r message=FALSE, warning=FALSE}
+
+
+hf_varcont<-hf[,c(-2,-4,-6,-10,-11,-12,-13)]
+head(hf_varcont)
+
+```
 
 Escalem variables
 
 ```{r message=FALSE, warning=FALSE}
 
-hfscaled<-scale(hf)
-hfscaled
-
+hfscaled_varcont<-scale(hf_varcont)
 
 ```
+
+
+
+
+#### **1. k-means (només variables continues)**
+k=3
+```{r message=FALSE, warning=FALSE}
+
+fitK<-kmeans(hfscaled_varcont,3)
+
+
+fitK
+
+plot(hf, col=fitK$cluster)
+
+```
+
+
+
+k=5
+
+```{r message=FALSE, warning=FALSE}
+
+fitK<-kmeans(hfscaled_varcont,5)
+
+plot(hf, col=fitK$cluster)
+
+```
+
+k=4
+```{r message=FALSE, warning=FALSE}
+
+fitK<-kmeans(hfscaled_varcont,4)
+
+plot(hf, col=fitK$cluster)
+
+```
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+k<-list()
+for(i in 1:20){
+  k[[i]]<-kmeans(hfscaled_varcont,i)
+}
+
+
+betweenss_totss<-list()
+for(i in 1:20){
+  betweenss_totss[[i]]<-k[[i]]$betweenss/k[[i]]$totss
+  
+}
+
+plot(1:20,betweenss_totss, type="b", ylab="Between SS / Total SS", xlab="Clusters(k)")
+```
+
+
+Quina es la k adequada? 4 o 6
+
+
+
+
+#### **2. Clustering jerarquic (només variables continues)**
 
 
 Primer es calculen les distancies 
@@ -378,32 +1343,64 @@ Primer es calculen les distancies
 
 ```{r message=FALSE, warning=FALSE}
 
-distancies<- dist(hf, method="euclidean")
+#distancies<- dist(hf, method="euclidean")
 
-distanciesscal<-dist(hfscaled, method="euclidean")
+distanciesS<-dist(hfscaled_varcont, method="euclidean")
 
 ```
-Clusters matriu no escalada
+
+Clusters matriu no escalada - Separa per la variable Platelets (Plaquetes), que es la variable més gran, no és útil
 ```{r message=FALSE, warning=FALSE}
 
-clusterH<-hclust(distancies, method = "ward")
+#clusterH<-hclust(distancies, method = "ward")
 
-plot(clusterH)
+#plot(clusterH)
 
 ```
 
 ```{r message=FALSE, warning=FALSE}
-clustergrups<-cutree(clusterH, k=5)
+#clustergrups<-cutree(clusterH, k=5)
+
+#plot(hf, col=clustergrups)
 
 ```
+
+
 Cluster matriu escalada
 ```{r message=FALSE, warning=FALSE}
 
-clusterHS<-hclust(distanciesscal, method = "ward")
+fitHS<-hclust(distanciesS, method = "ward")
 
-plot(clusterHS)
+plot(fitHS)
+rect.hclust(fitHS, k=5, border = "red")
+
+
+
+plot(fitHS)
+rect.hclust(fitHS, k=3, border = "red")
+
+
 
 ```
+
+```{r message=FALSE, warning=FALSE}
+clustergrupsS<-cutree(fitHS, k=5)
+
+plot(hf, col=clustergrupsS)
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+clustergrupsS<-cutree(fitHS, k=3)
+
+plot(hf, col=clustergrupsS)
+
+```
+
+
+
+
 
 
 
@@ -427,7 +1424,7 @@ boxplot(pres~trat,data=presiones,xlab="Tratamiento",ylab="Presión arterial sist
 
 
 
-### **2. **
+#### **2. **
 
 
 
