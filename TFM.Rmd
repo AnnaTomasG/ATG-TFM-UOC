@@ -23,6 +23,7 @@ Sys.setenv(LANGUAGE="es")
 \pagebreak
 
 
+
 Llibreries
 ```{r echo=FALSE,warning=FALSE,message=FALSE}
 #Cargamos las librerias que necesitaremos
@@ -46,9 +47,18 @@ library(lifecycle)
 library(fpc)
 library(NbClust)
 library(curl)
+library(cluster)
 
 library(zip)
-#set.seed(67637)
+
+library(Rtsne)
+library(dplyr)
+library(mclust)
+library(clustMixType)
+
+
+
+set.seed(67637)
 
 ```
 
@@ -163,7 +173,11 @@ Comprovem si hi ha missing data
 ```{r message=FALSE, warning=FALSE}
 
 hf[!complete.cases(hf),]
+dim(hf)
 
+hf <- na.omit(hf)
+
+dim(hf)
 
 
 ```
@@ -633,6 +647,130 @@ ggplot(hf, aes(x = hf$serum_sodium, fill = as.factor(hf$high_blood_pressure))) +
 ```
 
 
+**PCA**
+
+```{r message=FALSE, warning=FALSE}
+
+
+hfNscaled2<-hfNscaled[,-5]
+
+head(hfNscaled2)
+
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+res.pca <- prcomp(hfNscaled)
+# Visualize eigenvalues/variances
+fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 50))
+
+
+# Extract the results for variables
+var <- get_pca_var(res.pca)
+# Contributions of variables to PC1
+fviz_contrib(res.pca, choice = "var", axes = 1, top = 10)
+# Contributions of variables to PC2
+fviz_contrib(res.pca, choice = "var", axes = 2, top = 10)
+# Control variable colors using their contributions to the principle axis
+fviz_pca_var(res.pca, col.var="contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Avoid text overlapping
+             ) + theme_minimal() + ggtitle("Variables - PCA")
+
+
+
+
+
+
+```
+
+Sense observacio 10
+```{r message=FALSE, warning=FALSE}
+
+res.pca <- prcomp(hfNscaledNew)
+# Visualize eigenvalues/variances
+fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 50))
+
+
+# Extract the results for variables
+var <- get_pca_var(res.pca)
+# Contributions of variables to PC1
+fviz_contrib(res.pca, choice = "var", axes = 1, top = 10)
+# Contributions of variables to PC2
+fviz_contrib(res.pca, choice = "var", axes = 2, top = 10)
+# Control variable colors using their contributions to the principle axis
+fviz_pca_var(res.pca, col.var="contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Avoid text overlapping
+             ) + theme_minimal() + ggtitle("Variables - PCA")
+
+
+
+
+
+
+```
+
+
+Sense variable serum creatinine
+
+
+```{r message=FALSE, warning=FALSE}
+
+res.pca <- prcomp(hfNscaled2)
+# Visualize eigenvalues/variances
+fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 50))
+
+
+# Extract the results for variables
+var <- get_pca_var(res.pca)
+# Contributions of variables to PC1
+fviz_contrib(res.pca, choice = "var", axes = 1, top = 10)
+# Contributions of variables to PC2
+fviz_contrib(res.pca, choice = "var", axes = 2, top = 10)
+# Control variable colors using their contributions to the principle axis
+fviz_pca_var(res.pca, col.var="contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Avoid text overlapping
+             ) + theme_minimal() + ggtitle("Variables - PCA")
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+summary(hf)
+
+
+boxplot(hf$serum_creatinine, main="Creatinina en Sang")#Te molts outliers en la part alta
+
+boxplot(hf$serum_sodium, main="Sodi en Sang")
+
+boxplot(hf$time, main="Temps de seguiment")
+
+
+
+```
+
+
+
+
+
+
+
 
 
 ###Anàlisi de clusters amb tota la matriu
@@ -651,14 +789,36 @@ s'ha de fer ja que les variables estan mesurades en escales molt diferents.
 
 ```{r message=FALSE, warning=FALSE}
 
-
-
 hfscaled<-scale(hf)
 head(hfscaled)
 
+```
 
+
+
+
+
+
+
+
+Tendència a formar clusters VAT (The Visual Assessment of cluster tendency)
+
+```{r message=FALSE, warning=FALSE}
+
+get_clust_tendency(hfN, n=50)
+
+get_clust_tendency(hfNscaled, n=50)
 
 ```
+En els dos casos el estadístic de Hopkins dòna un valor proper a 1, el que significa que el nostre dataset té tendència a formar clusters.
+
+El gràfic mostra alguns blocs més foscos a la diagonal però petits i dispersos. (plot for ordered dissimilarity image. This is generated using the function fviz_dist(dist.obj))
+
+**Hopkins statistic: If the value of Hopkins statistic is close to 1 (far above 0.5), then we can conclude that the dataset is significantly clusterable.**
+
+**VAT (Visual Assessment of cluster Tendency): The VAT detects the clustering tendency in a visual form by counting the number of square shaped dark (or colored) blocks along the diagonal in a VAT image.**
+
+***
 
 
 
@@ -666,17 +826,19 @@ head(hfscaled)
 
 S'han d'utilitzar només les variables numériques. Treiem les binaries.
 
+
 ```{r message=FALSE, warning=FALSE}
 
 hfNscaled<-hfscaled[,-c(2,4,6,10,11,13)]
 head(hfNscaled)
+
 ```
 
 
 
+**PROVA***
 
 **Calculem k-means utilitzant funció kmeans()**
-
 
 
 k=3
@@ -691,21 +853,6 @@ fitK
 get_pos_results(hf,fitK$cluster)
 
 ```
-
-
-k=2
-```{r message=FALSE, warning=FALSE}
-
-fitK<-kmeans(hfNscaled,2,nstart=50)
-
-fitK
-
-#plot(hf, col=fitK$cluster)
-
-get_pos_results(hf,fitK$cluster)
-
-```
-
 
 
 
@@ -734,6 +881,9 @@ for(k in 1:5){
 ```
 
 
+***
+
+**Trobem el número de clusters òptim**
 
 Trobem la k adequada amb un **for**:
 
@@ -778,9 +928,6 @@ fviz_nbclust(hfNscaled, kmeans, method = "wss") +
 ```
 
 
-
-
-
 Average Silhouette method: mesura la qualitat del cluster veient com de bé està classificada cada observació en el seu cluster, volem que l'index es maximitzi
 
 ```{r message=FALSE, warning=FALSE}
@@ -791,6 +938,8 @@ fviz_nbclust(hfNscaled, kmeans, method = "silhouette")+
 ```
 
 
+Gap statistic method
+
 ```{r message=FALSE, warning=FALSE}
 
 # Gap statistic
@@ -800,7 +949,7 @@ fviz_nbclust(hfNscaled, kmeans, nstart = 25,  method = "gap_stat", nboot = 100)+
   labs(subtitle = "Gap statistic method")
 
 ```
-# Elbow method, # Silhouette method i # Gap statistic donen resultats molt dispars, escollim k=4
+Elbow method, Silhouette method i Gap statistic donen resultats molt dispars, escollim k=4
 
 
 reultats per k=4
@@ -820,31 +969,7 @@ fviz_cluster(fitK,data=hfNscaled, geom = "point", ellipse.type = "norm", palette
 
 
 ```
-
-
-
-
-
-
-
-
-
-**For** per representar els clusters obtinguts amb diferents k.
-
-```{r message=FALSE, warning=FALSE}
-
-runs<-list()
-for(i in 1:3){
-  runs[[i]]<-kmeans(hfNscaled,i)
-  
-  #plot(hf, col=runs[[i]]$cluster)
-}
-
-
-
-```
-
-
+***
 
 
 **Calculem k-means utilitzant funció eclust()** **I es realitza la validació dels clusters**
@@ -865,7 +990,7 @@ km.res<-eclust(hfNscaled, "kmeans", k=4, nstart=50, graph = F )
 fviz_cluster(km.res, geom = "point", ellipse.type = "norm", palette= "jco", ggtheme = theme_minimal())
 ```
 
-**External clustering Validation*
+**External clustering Validation**
 
 ```{r message=FALSE, warning=FALSE}
 
@@ -955,12 +1080,156 @@ print(clust_stats$vi)
 
 
 
+
+**Utilitzem la funció NbClust() per calcular 30 index que ens ajudarán a obtenir el número òptim de clusters**
+```{r message=FALSE, warning=FALSE}
+
+res<-NbClust(hfNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "kmeans", index = "alllong")
+
+
+
+barplot(table(res$Best.n[1,]),
+              xlab="Numer of Clusters", ylab="Number of Criteria",
+                    main="Number of Clusters Chosen by 28 Criteria")
+table(res$Best.n[1,])
+
+
+```
+Suggereix k=2
+
+```{r message=FALSE, warning=FALSE}
+set.seed(1234)
+fit.km <- kmeans(hfNscaled, 2, nstart=25)
+
+ct.km <- table(hf$DEATH_EVENT, fit.km$cluster)
+ct.km  
+
+library(flexclust)
+randIndex(ct.km)
+
+```
+
+**FINAL DE LA PROVA**
+
+***
+
+
+
+**SEQUENCIA FINAL**
+
+Matriu numèrica i escalada
+
+**Utilitzem la funció NbClust() per calcular 30 index que ens ajudarán a obtenir el número òptim de clusters**
+```{r message=FALSE, warning=FALSE}
+
+res<-NbClust(hfNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "kmeans", index = "alllong")
+
+
+
+barplot(table(res$Best.n[1,]),
+              xlab="Numer of Clusters", ylab="Number of Criteria",
+                    main="Number of Clusters Chosen by 28 Criteria")
+table(res$Best.n[1,])
+
+
+```
+Suggereix k=2
+
+
+No es veu clar amb el Elbow method
+```{r message=FALSE, warning=FALSE}
+fviz_nbclust(hfNscaled, kmeans, method = "wss")
+
+
+```
+
+
+Calculem kmeans per k=2
+```{r message=FALSE, warning=FALSE}
+set.seed(67637)
+
+
+km.res <- kmeans(hfNscaled, 2, nstart = 50)
+
+
+
+```
+
+Calculem mitjanes de les variables en cada cluster per veure diferències inicials. 
+```{r message=FALSE, warning=FALSE}
+aggregate(hf, by=list(cluster=km.res$cluster), mean)
+
+```
+
+Representem els resultats utilitzant les 2 primeres PCA
+
+```{r message=FALSE, warning=FALSE}
+
+
+fviz_cluster(km.res, data = hfNscaled,
+palette = c( "#E7B800", "#FC4E07"),
+ellipse.type = "convex", # Concentration ellipse
+star.plot = FALSE, # Add segments from centroids to items
+repel = TRUE, # Avoid label overplotting (slow)
+ggtheme = theme_minimal()
+)
+
+
+
+
+```
+
+
+
 #### **2. Clustering jerarquic**
 
+Les dades han de ser numériques i han d'estar escalades:
 
 
 
-Primer es calculen les distancies 
+
+
+
+Aplico NbClust() per veure quin k és el més adequat i on s'haurà de tallar lel dendograma.
+
+**Utilitzem la funció NbClust() per calcular 30 index que ens ajudarán a obtenir el número òptim de clusters**
+
+
+```{r message=FALSE, warning=FALSE}
+
+res<-NbClust(hfNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "ward.D2", index = "alllong")
+
+
+
+barplot(table(res$Best.n[1,]),
+              xlab="Numer of Clusters", ylab="Number of Criteria",
+                    main="Number of Clusters Chosen by 30 Criteria")
+table(res$Best.n[1,])
+
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+res<-NbClust(hfNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "average", index = "alllong")
+
+
+
+barplot(table(res$Best.n[1,]),
+              xlab="Numer of Clusters", ylab="Number of Criteria",
+                    main="Number of Clusters Chosen by 29 Criteria")
+table(res$Best.n[1,])
+
+
+```
+
+
+Després calculem els clusters amb la funció hclust (), compararem els 2 mètodes d'aglomeració més comuns i compararem els resultats **ward.D2** i **average**.
+
+
+Primer es calculen les distàncies, utilitzem la fòrmula de la distància euclidea. 
 
 
 ```{r message=FALSE, warning=FALSE}
@@ -969,7 +1238,8 @@ distancies<-dist(hfNscaled, method="euclidean")
 
 ```
 
-Clusters matriu no escalada - Separa per la variable Platelets (Plaquetes), que es la variable més gran, no és útil
+Prova: Clusters matriu no escalada - Separa per la variable Platelets (Plaquetes), que es la variable més gran, no és útil
+
 ```{r message=FALSE, warning=FALSE}
 
 #clusterH<-hclust(distancies, method = "ward")
@@ -986,26 +1256,391 @@ Clusters matriu no escalada - Separa per la variable Platelets (Plaquetes), que 
 ```
 
 
-Cluster matriu escalada
+**Ward**
+
 ```{r message=FALSE, warning=FALSE}
 
-fitHS<-hclust(distancies, method = "ward")
+res.hc1<-hclust(distancies, method = "ward.D2")
 
-#plot(fitHS)
-#rect.hclust(fitHS, k=5, border = "red")
-
-fitHS2 <- hcut(hfNscaled, k = 3, hc_method = "complete")
-
-#plot(fitHS)
-#rect.hclust(fitHS, k=3, border = "red")
+#plot(res.hc1)
+#rect.hclust(res.hc1, k=2, border = "red")
 
 
-#grafic
-fviz_dend(fitHS, cex = 0.5)
+fviz_dend(res.hc1, k = 2, # Cut in four groups
+cex = 0.2, # label size
+k_colors = c("#00AFBB", "#E7B800"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE, # Add rectangle around groups
+main= "Cluster Dendogram (ward.D2)"
+)
+
+
+
+
+fviz_dend(res.hc1, k = 3, # Cut in four groups
+cex = 0.2, # label size
+k_colors = c("#00AFBB", "#E7B800", "#FC4E07"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE, # Add rectangle around groups
+main= "Cluster Dendogram (ward.D2)"
+)
 
 ```
 
-Escollim on tallar el dendograma
+
+Scatterplot
+
+```{r message=FALSE, warning=FALSE}
+
+#tallem el dendograma per obtenir els clusters
+#k=2
+groups<- cutree(res.hc1, k = 2)
+
+
+fviz_cluster(list(data =hfNscaled , cluster = groups),
+palette = c("#E7B800", "#FC4E07"),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+
+
+#k=3 (CLUSTERS SOLAPATS)
+groups<- cutree(res.hc1, k = 3)
+
+
+fviz_cluster(list(data =hfNscaled , cluster = groups),
+palette = c("#00AFBB","#E7B800", "#FC4E07"),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+
+```
+
+Verifiquem el dendograma comparant les distancies calculades per la funció dist() amb les distancies cophenetic (altura del dendograma quan dues branques es junten amb una sola)
+
+
+```{r message=FALSE, warning=FALSE}
+res.coph <- cophenetic(res.hc1)
+
+
+cor(distancies, res.coph)
+
+```
+S'obté un valor baix. Comença a ser un bon resultat a partir de 0.75. No hi ha correlació entre el arbre i les distancies en la matriu inicial de dades.
+
+
+**Average NO SURT BE**
+
+
+```{r message=FALSE, warning=FALSE}
+
+res.hc2<-hclust(distancies, method = "centroid")
+
+#plot(res.hc1)
+#rect.hclust(res.hc1, k=2, border = "red")
+
+
+
+fviz_dend(res.hc2, k = 2, # Cut in two groups
+cex = 0.2, # label size
+k_colors = c("#00AFBB", "#E7B800", "#FC4E07"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE, # Add rectangle around groups
+main= "Cluster Dendogram (average)"
+)
+
+
+```
+
+
+Scatterplot
+
+```{r message=FALSE, warning=FALSE}
+
+#tallem el dendograma per obtenir els clusters
+#k=2
+groups<- cutree(res.hc2, k = 2)
+
+
+fviz_cluster(list(data =hfNscaled , cluster = groups),
+palette = c("#E7B800", "#FC4E07"),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+
+
+
+```
+
+
+**Possibles outliers:**
+
+```{r message=FALSE, warning=FALSE}
+
+summary(hf)
+
+hf[10,]
+
+hf[297,]
+
+hf[296,]
+
+boxplot(hf$serum_creatinine)
+
+
+
+```
+
+
+
+
+Tornem a fer els calculs de hclust sense l'observació 10 i 296
+
+```{r message=FALSE, warning=FALSE}
+
+hfNscaledNew<-hfNscaled[-c(10),]
+```
+
+
+```{r message=FALSE, warning=FALSE}
+
+distanciesNew<-dist(hfNscaledNew, method="euclidean")
+
+distancies2<-dist(hfNscaled2, method="euclidean")
+
+```
+
+
+**Average NEW**
+Mateixos resultats amb complete, single and centroid (amb i sense outliers)
+
+```{r message=FALSE, warning=FALSE}
+
+res.hc2<-hclust(distanciesNew, method = "average")
+
+
+
+fviz_dend(res.hc2, k = 2, # Cut in four groups
+cex = 0.2, # label size
+k_colors = c("#00AFBB", "#E7B800", "#FC4E07"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE, # Add rectangle around groups
+main= "Cluster Dendogram (average)"
+)
+
+
+```
+
+
+Scatterplot
+
+```{r message=FALSE, warning=FALSE}
+
+#tallem el dendograma per obtenir els clusters
+#k=2
+groups<- cutree(res.hc2, k = 2)
+
+
+fviz_cluster(list(data =hfNscaledNew , cluster = groups),
+palette = c("#00AFBB","#E7B800", "#FC4E07"),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+
+
+
+```
+
+
+**Ward NEW**
+
+```{r message=FALSE, warning=FALSE}
+
+res.hc1<-hclust(distanciesNew, method = "ward.D2")
+
+
+
+fviz_dend(res.hc1, k = 2, # Cut in four groups
+cex = 0.2, # label size
+k_colors = c("#00AFBB", "#E7B800"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE, # Add rectangle around groups
+main= "Cluster Dendogram (ward.D2)"
+)
+
+
+
+
+fviz_dend(res.hc1, k = 3, # Cut in four groups
+cex = 0.2, # label size
+k_colors = c("#00AFBB", "#E7B800", "#FC4E07"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE, # Add rectangle around groups
+main= "Cluster Dendogram (ward.D2)"
+)
+
+```
+
+
+Scatterplot
+
+```{r message=FALSE, warning=FALSE}
+
+#tallem el dendograma per obtenir els clusters
+#k=2
+groups<- cutree(res.hc1, k = 2)
+
+
+fviz_cluster(list(data =hfNscaledNew , cluster = groups),
+palette = c("#E7B800", "#FC4E07"),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+
+
+#k=3 (CLUSTERS SOLAPATS)
+groups<- cutree(res.hc1, k = 3)
+
+
+fviz_cluster(list(data =hfNscaledNew , cluster = groups),
+palette = c("#00AFBB","#E7B800", "#FC4E07"),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+
+```
+
+
+
+
+Donat que el methode average no dona bons resultats ja que un dels clusters nomes conté 3 observacions podem veure les diferencies obtingudes entre els dendogrames obtinguts amb i sense el "outlier" (NO ES POT NO TENEN DIMENSIONS IGUALS)
+
+
+
+**Average (sense serum creatinine)** SOBTENEN RESULTATS MOLT PITJORS
+
+
+```{r message=FALSE, warning=FALSE}
+
+res.hc2<-hclust(distancies2, method = "average")
+
+
+
+fviz_dend(res.hc2, k = 2, # Cut in four groups
+cex = 0.2, # label size
+k_colors = c("#00AFBB", "#E7B800", "#FC4E07"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE, # Add rectangle around groups
+main= "Cluster Dendogram (average)"
+)
+
+
+```
+
+
+Scatterplot
+
+```{r message=FALSE, warning=FALSE}
+
+#tallem el dendograma per obtenir els clusters
+#k=2
+groups<- cutree(res.hc2, k = 2)
+
+
+fviz_cluster(list(data =hfNscaled2 , cluster = groups),
+palette = c("#00AFBB","#E7B800", "#FC4E07"),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+
+
+
+```
+
+
+**Ward 2 (sense serum creatinine)** SOBTENEN RESULTATS MOLT PITJORS
+
+```{r message=FALSE, warning=FALSE}
+
+res.hc1<-hclust(distancies2, method = "ward.D2")
+
+
+
+fviz_dend(res.hc1, k = 2, # Cut in four groups
+cex = 0.2, # label size
+k_colors = c("#00AFBB", "#E7B800"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE, # Add rectangle around groups
+main= "Cluster Dendogram (ward.D2)"
+)
+
+
+
+
+fviz_dend(res.hc1, k = 3, # Cut in four groups
+cex = 0.2, # label size
+k_colors = c("#00AFBB", "#E7B800", "#FC4E07"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE, # Add rectangle around groups
+main= "Cluster Dendogram (ward.D2)"
+)
+
+```
+
+
+Scatterplot
+
+```{r message=FALSE, warning=FALSE}
+
+#tallem el dendograma per obtenir els clusters
+#k=2
+groups<- cutree(res.hc1, k = 2)
+
+
+fviz_cluster(list(data =hfNscaled2 , cluster = groups),
+palette = c("#E7B800", "#FC4E07"),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+
+
+#k=3 (CLUSTERS SOLAPATS)
+groups<- cutree(res.hc1, k = 3)
+
+
+fviz_cluster(list(data =hfNscaled2 , cluster = groups),
+palette = c("#00AFBB","#E7B800", "#FC4E07"),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+
+```
+
+
+
+***
+
+
+
+Escollim on tallar el dendograma **Millor NbClust**
 
 ```{r message=FALSE, warning=FALSE}
 
@@ -1021,6 +1656,10 @@ fviz_nbclust(hfNscaled, hcut, method = "silhouette") +
 
 
 ```
+
+
+
+
 
 
 Escollim 3 clusters
@@ -1073,8 +1712,8 @@ fviz_dend(fitHS, k = 3,
 
 
 
-**Calcul utilitzant funció eclust()**
 
+**Calcul utilitzant funció eclust()**
 
 ```{r message=FALSE, warning=FALSE}
 
@@ -1088,33 +1727,15 @@ hc.res <- eclust(hfNscaled, "hclust", k = 2, hc_metric = "euclidean", hc_method 
 
 fviz_dend(hc.res, show_labels = FALSE, palette = "jco", as.ggplot = TRUE)
 
-
-```
-
-
-
-```{r message=FALSE, warning=FALSE}
-
-
-
-#Hierarchical cluster algorithm
-
-hc.res <- eclust(hfNscaled, "hclust", k = 4, hc_metric = "euclidean", hc_method = "ward.D2", graph = FALSE)
-
-#Clustering visualization
-
-fviz_dend(hc.res, show_labels = FALSE, palette = "jco", as.ggplot = TRUE)
-
 require("cluster")
 
-sil<-silhouette(hc.res$cluster,dist(hfscaledR))
+sil<-silhouette(hc.res$cluster,dist(hfNscaled))
 
 fviz_silhouette(sil,label=FALSE,print.summary = FALSE)
 
 
+
 ```
-
-
 
 
 *EXTERNAL CLUSTERING VALIDATION*
@@ -1141,6 +1762,7 @@ clust_stats$vi
 
 ```
 
+***
 
 
 
@@ -1148,9 +1770,39 @@ clust_stats$vi
 
 
 
+#### **3.Hierarchical + k-means **3
+
+Matriu numérica i escalada
+
+escollirem k=2 pels resultats de NbClust
+
+```{r message=FALSE, warning=FALSE}
+
+res.hk <-hkmeans(hfNscaled, 2)
+
+res.hk
+
+```
+
+```{r message=FALSE, warning=FALSE}
+
+#Visualitzem el dendograma
+fviz_dend(res.hk, cex = 0.6, palette = "jco",
+rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "Cluster Dendogram hkmeans")
 
 
-#### **3.PAM **
+#Visualitzem els clusters fen servir les 2 primeres PCA
+
+fviz_cluster(res.hk, palette = "jco", repel = TRUE,
+ggtheme = theme_classic())
+
+```
+
+S'ha conseguit que no hi hagi solapació entre clusters.
+
+
+
+#### **4.PAM **
 
 hfscaled
 
@@ -1180,23 +1832,38 @@ fviz_nbclust(hfscaled, pam, method = "silhouette") +
 ```
 
 
+
+**Utilitzem la funció NbClust() per calcular 30 index que ens ajudarán a obtenir el número òptim de clusters (k)**
+```{r message=FALSE, warning=FALSE}
+
+res<-NbClust(hfscaled, diss=NULL, distance = "manhattan", min.nc=2, max.nc=10, method = "centroid", index = "alllong")
+
+
+```
+
+
+
+
 apliquem l'algoritme PAM
 
 ```{r message=FALSE, warning=FALSE}
 
-pam.res <- pam(hfscaled, 3, metric = "manhattan")
+pam.res <- pam(hfscaledR, 2, metric = "manhattan")
 # print(pam.res)
+
+
+clusplot(pam.res)
 
 ```
 
-gràfic i resultats per k=4
+gràfic i resultats per k=2
 
 ```{r message=FALSE, warning=FALSE}
 fviz_cluster(pam.res, geom = "point", ellipse.type = "norm", palette= "jco", ggtheme = theme_minimal())+labs(subtitle = "PAM")
 
 get_pos_results(hf,pam.res$clustering)
 
-for(c in 1:3){
+for(c in 1:2){
     cat("Cluster =",c,"\n")
     # print(summary(hf[pam.res$clustering==c,]))
     for(i in 1:13){
@@ -1218,7 +1885,14 @@ for(c in 1:3){
 
 
 
-#### **4.CLARA **
+
+
+
+
+
+
+
+#### **5.CLARA **
 
 ```{r message=FALSE, warning=FALSE}
 
@@ -1242,159 +1916,426 @@ fviz_cluster(clara.res, geom = "point", ellipse.type = "norm", palette= "jco", g
 ```
 S'obtenen pitjors resultats que amb el PAM
 
-###Anàlisi de clusters estratificat
-
-Homes/Dones
 
 
 
 
 
 
-###Anàlisi de clusters amb les variables continues (CREC QUE ES MILLOR FERHO AMB TOTA LA MATRIU)
-
-```{r message=FALSE, warning=FALSE}
 
 
-hf_varcont<-hf[,c(-2,-4,-6,-10,-11,-12,-13)]
-head(hf_varcont)
 
-```
+#### **6.Mixed types: Gower distance and PAM **
 
-Escalem variables
+Convertim en factor les variables binaries
 
 ```{r message=FALSE, warning=FALSE}
+hfF<-hf
 
-hfscaled_varcont<-scale(hf_varcont)
-
-```
-
-
-
-
-#### **1. k-means (només variables continues)**
-k=3
-```{r message=FALSE, warning=FALSE}
-
-fitK<-kmeans(hfscaled_varcont,3)
+hfF$anaemia<-as.factor(hfF$anaemia)
+hfF$diabetes<-as.factor(hfF$diabetes)
+hfF$high_blood_pressure<-as.factor(hfF$high_blood_pressure)
+hfF$sex<-as.factor(hfF$sex)
+hfF$smoking<-as.factor(hfF$smoking)
+hfF$DEATH_EVENT<-as.factor(hfF$DEATH_EVENT)
 
 
-fitK
+head(hfF)
 
-plot(hf, col=fitK$cluster)
+str(hfF)
+
 
 ```
 
 
-
-k=5
+Gower distance
 
 ```{r message=FALSE, warning=FALSE}
 
-fitK<-kmeans(hfscaled_varcont,5)
+gower_dist <- daisy(hfF,
+                    metric = "gower")
 
-plot(hf, col=fitK$cluster)
+summary(gower_dist)
+
+```
+(surt el mateix resultat si faig servir la matriu inicial i si faig servir la matriu inicial escalada)
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+gower_mat <- as.matrix(gower_dist)
+
+# Els mes similars
+
+hfF[which(gower_mat == min(gower_mat[gower_mat != min(gower_mat)]),
+        arr.ind = TRUE)[1, ], ]
+
+#Els mes diferents
+
+hfF[which(gower_mat == max(gower_mat[gower_mat != max(gower_mat)]),
+        arr.ind = TRUE)[1, ], ]
 
 ```
 
-k=4
+
+Seleccionem el numero de clusters
+
+No estic segura de si esta ben aplicat el NbClust().
 ```{r message=FALSE, warning=FALSE}
 
-fitK<-kmeans(hfscaled_varcont,4)
+res<-NbClust(hf, gower_dist, distance = NULL, min.nc=2, max.nc=10, method = "centroid", index = "all")
 
-plot(hf, col=fitK$cluster)
-
+table(res$Best.n[1,])
 ```
 
 
-
-
-
+silhouette width
 
 ```{r message=FALSE, warning=FALSE}
 
-k<-list()
-for(i in 1:20){
-  k[[i]]<-kmeans(hfscaled_varcont,i)
-}
+# Calculem silhouette width per a diferents k
 
-
-betweenss_totss<-list()
-for(i in 1:20){
-  betweenss_totss[[i]]<-k[[i]]$betweenss/k[[i]]$totss
+sil_width <- c(NA)
+for(i in 2:10){
+  
+  pam_fit <- pam(gower_dist,
+                 diss = TRUE,
+                 k = i)
+  
+  sil_width[i] <- pam_fit$silinfo$avg.width
   
 }
 
-plot(1:20,betweenss_totss, type="b", ylab="Between SS / Total SS", xlab="Clusters(k)")
+
+# Plot sihouette width (com més gran millor)
+
+plot(1:10, sil_width,
+     xlab = "Number of clusters",
+     ylab = "Silhouette Width")
+lines(1:10, sil_width)
+
+```
+Ens surten 8 clusters com a millor opció
+
+calculem PAM
+k=2
+```{r message=FALSE, warning=FALSE}
+
+res.pam <- pam(gower_dist, diss = TRUE, k = 2)
+
+pam_results <- hfF %>%
+  mutate(cluster = res.pam$clustering) %>%
+  group_by(cluster) %>%
+  do(the_summary = summary(.))
+
+
+pam_results$the_summary
+
+#També podem veure l'observació que fa de centre del cluster (medoid), ens dòna informació del cluster senser
+
+hfF[res.pam$medoids, ]
+
+```
+
+```{r message=FALSE, warning=FALSE}
+for(c in 1:2){
+    cat("Cluster =",c,"\n")
+    
+    for(i in 1:13){
+      cat(names(hfF)[i])
+      cat("\n")
+      cat("mean: ",mean(hf[res.pam$clustering==c,i])[1])
+      cat("\n")
+      cat("min: ",min(hf[res.pam$clustering==c,i])[1])
+      cat("\n")
+      cat("max: ",max(hf[res.pam$clustering==c,i])[1])
+      cat("\n")
+      cat("\n")
+    }
+    }
+
+```
+
+k=8
+
+```{r message=FALSE, warning=FALSE}
+
+res.pam <- pam(gower_dist, diss = TRUE, k = 8)
+
+pam_results <- hfF %>%
+  mutate(cluster = res.pam$clustering) %>%
+  group_by(cluster) %>%
+  do(the_summary = summary(.))
+
+
+pam_results$the_summary
+
+#També podem veure l'observació que fa de centre del cluster (medoid), ens dòna informació del cluster senser
+
+hfF[res.pam$medoids, ]
+
 ```
 
 
-Quina es la k adequada? 4 o 6
+Una altre manera de representar-ho amb "t-distributed stochastic neighborhood embedding, or t-SNE", una tecnica de reducció de dimensió que intenta mantenir l'estructura de les dades pero de manera que es puguin visualitzar els clusters en 2D o 3D
 
 
+```{r message=FALSE, warning=FALSE}
+
+tsne_obj <- Rtsne(gower_dist, is_distance = TRUE)
+tsne_data <- tsne_obj$Y %>%
+  data.frame() %>%
+  setNames(c("X", "Y")) %>%
+  mutate(cluster = factor(res.pam$clustering))
 
 
-#### **2. Clustering jerarquic (només variables continues)**
+ggplot(aes(x = X, y = Y), data = tsne_data) +
+  geom_point(aes(color = cluster))
 
 
-Primer es calculen les distancies 
+```
 
 
 
 ```{r message=FALSE, warning=FALSE}
 
-#distancies<- dist(hf, method="euclidean")
-
-distanciesS<-dist(hfscaled_varcont, method="euclidean")
+clusplot(res.pam)
 
 ```
 
-Clusters matriu no escalada - Separa per la variable Platelets (Plaquetes), que es la variable més gran, no és útil
+
+
+
+
+
+
+
+#### **7.K-prototypes **
+
 ```{r message=FALSE, warning=FALSE}
 
-#clusterH<-hclust(distancies, method = "ward")
 
-#plot(clusterH)
+res.prot<-kproto(hfF, 2, lambda = NULL, iter.max = 100, nstart = 1, na.rm = TRUE)
+
+
+
+```
+```{r message=FALSE, warning=FALSE}
+
+clprofiles(res.prot, hf)
+
+           
+
+```
+
+#### **8.Model based clustering***
+
+Comprovem que les variables tenen una distribució normal.
+CPK i Creatinina en sang son les dues variables que no tenen distribució normal
+```{r message=FALSE, warning=FALSE}
+histogram(hf$age)
+histogram(hf$creatinine_phosphokinase)
+histogram(hf$ejection_fraction)
+histogram(hf$platelets)
+histogram(hf$serum_creatinine)
+histogram(hf$serum_sodium)
+histogram(hf$time)
+
+
+
+histogram(log(hf$creatinine_phosphokinase))
+histogram(log(hf$serum_creatinine))
+```
+
+Matriu numerica sense escalar
+
+```{r message=FALSE, warning=FALSE}
+
+hfN<-hf[,-c(2,4,6,10,11,13)]
+
+head(hfN)
+head(hf)
+```
+
+Calcul dels models
+```{r message=FALSE, warning=FALSE}
+
+res.mc <- Mclust(hfN, G = NULL)
+
+
+res.mc1 <- Mclust(hfNscaled, G = NULL)
+
+
+res.mc2 <- Mclust(hf, G = NULL)
+
+
+
+#2 clusters per comparar amb els altres
+
+res.mc3 <- Mclust(hfNscaled, G = 2)
+
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+#variables numeriques
+
+summary(res.mc)
+plot(res.mc, what = "density")
+plot(res.mc, what = "uncertainty")
+
+summary(res.mc$BIC)
+
+#variables numeriques escalades
+
+summary(res.mc1)
+plot(res.mc1, what = "density")
+plot(res.mc1, what = "uncertainty")
+
+plot(res.mc1, what = "BIC")
+
+summary(res.mc1$BIC)
+
+#tota la matriu
+
+summary(res.mc2)
+plot(res.mc2, what = "density")
+plot(res.mc2, what = "uncertainty")
+
+
+#pel calcul amb 2 clusters - NO S'OBTENEN BONS RESULTATS
+
+table(hf$DEATH_EVENT, res.mc3$classification)
+
+table(hf$sex, res.mc3$classification)
+
 
 ```
 
 ```{r message=FALSE, warning=FALSE}
-#clustergrups<-cutree(clusterH, k=5)
 
-#plot(hf, col=clustergrups)
+legend_args <- list(x = "center", ncol = 5)
+plot(res.mc1, what = 'BIC', legendArgs = legend_args)
+
+
+legend_args <- list(x = "center", ncol = 5)
+plot(res.mc2, what = 'BIC', legendArgs = legend_args)
+
+
+
 
 ```
 
 
-Cluster matriu escalada
+Apliquem MclustrDR que redueix dimensions
+
 ```{r message=FALSE, warning=FALSE}
 
-fitHS<-hclust(distanciesS, method = "ward")
+res.mcdr1 <- MclustDR(res.mc1, lambda = 1)
 
-plot(fitHS)
-rect.hclust(fitHS, k=5, border = "red")
-
+summary(res.mcdr1)
 
 
-plot(fitHS)
-rect.hclust(fitHS, k=3, border = "red")
+#2 clusters
+
+res.mcdr3 <- MclustDR(res.mc3, lambda = 1)
+
+summary(res.mcdr3)
 
 
 
 ```
 
 ```{r message=FALSE, warning=FALSE}
-clustergrupsS<-cutree(fitHS, k=5)
 
-plot(hf, col=clustergrupsS)
+plot(res.mcdr1, what = "contour")
+
+
+plot(res.mcdr3, what = "contour")
+
+
+
+plot(res.mcdr1, what = "boundaries", ngrid = 200)
+
+plot(res.mcdr3, what = "boundaries", ngrid = 200)
+
 
 ```
+
+Convertim en logaritme CPK i Creatinina en sang
+
+```{r message=FALSE, warning=FALSE}
+
+
+
+hfNlog<-hfN
+
+hfNlog$creatinine_phosphokinase<-log(hfNlog$creatinine_phosphokinase)
+hfNlog$serum_creatinine<-log(hfNlog$serum_sodium)
+
+head(hfNlog)
+
+head(hfN)
+
+
+```
+
+```{r message=FALSE, warning=FALSE}
+
+res.mc4 <- Mclust(hfNlog, G = NULL)
+
+summary(res.mc4)
+plot(res.mc4, what = "density")
+plot(res.mc4, what = "uncertainty")
+
+plot(res.mc4, what = "BIC")
+
+summary(res.mc4$BIC)
+
+
+```
+
+
+
+
+#### **9.Fuzzy clustering **
+
+Matriu numèrica i escalada també es pot utilitzar el resultat de la distancia de gower
+
+```{r message=FALSE, warning=FALSE}
+res.fanny <- fanny(hfNscaled, 2)
+
+
+fviz_cluster(res.fanny, ellipse.type = "norm", repel = TRUE,
+palette = "jco", ggtheme = theme_minimal(),
+legend = "right")
+
+```
+
 
 
 ```{r message=FALSE, warning=FALSE}
-clustergrupsS<-cutree(fitHS, k=3)
+res.fanny2 <- fanny(gower_dist, diss = TRUE, k = 2)
 
-plot(hf, col=clustergrupsS)
+clusplot(res.fanny2)
+
+
+```
+
+Evaluem el resultat
+
+
+```{r message=FALSE, warning=FALSE}
+
+fviz_silhouette(res.fanny, palette = "jco",
+ggtheme = theme_minimal())
+
+
+fviz_silhouette(res.fanny2, palette = "jco",
+ggtheme = theme_minimal())
 
 ```
 
@@ -1405,22 +2346,68 @@ plot(hf, col=clustergrupsS)
 
 
 
+###Anàlisi de clusters estratificat
+
+Homes/Dones
+```{r message=FALSE, warning=FALSE}
+hfH<-hf[hf$sex==1,]
+
+hfD<-hf[hf$sex==0,]
+
+head(hfH)
+dim(hfD)
+
+```
+
+Numeriques i escalades
+```{r message=FALSE, warning=FALSE}
+hfHNscaled<- scale(hfH[,-c(2,4,6,10,11,13)])
+
+hfDNscaled<- scale(hfD[,-c(2,4,6,10,11,13)])
+
+head(hfDNscaled)
+
+```
+
+k-means
+
+**Utilitzem la funció NbClust() per calcular 30 index que ens ajudarán a obtenir el número òptim de clusters**
+```{r message=FALSE, warning=FALSE}
+
+res<-NbClust(hfDNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "kmeans", index = "alllong")
 
 
+
+barplot(table(res$Best.n[1,]),
+              xlab="Numer of Clusters", ylab="Number of Criteria",
+                    main="Number of Clusters Chosen by 28 Criteria")
+table(res$Best.n[1,])
+
+
+```
+
+```{r message=FALSE, warning=FALSE}
+
+res<-NbClust(hfHNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "kmeans", index = "alllong")
+
+
+
+barplot(table(res$Best.n[1,]),
+              xlab="Numer of Clusters", ylab="Number of Criteria",
+                    main="Number of Clusters Chosen by 28 Criteria")
+table(res$Best.n[1,])
+
+
+```
 
 
 
 
 ```{r message=FALSE, warning=FALSE}
-boxplot(pres~trat,data=presiones,xlab="Tratamiento",ylab="Presión arterial sistólica" )
 
 
 ```
 
-
-
-
-***
 
 
 
