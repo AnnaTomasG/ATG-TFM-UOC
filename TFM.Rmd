@@ -55,7 +55,9 @@ library(Rtsne)
 library(dplyr)
 library(mclust)
 library(clustMixType)
-
+library(bestNormalize)
+library(tictoc)
+library(patchwork)
 
 
 set.seed(67637)
@@ -92,6 +94,75 @@ get_pos_results<-function(df,cvect){
   }
 
 ```
+
+Funció per fer diferentss estudis estratificats amb hkmeans
+
+```{r message=FALSE, warning=FALSE}
+
+study_hkmeans <- function(dfNumScaled,k,outliers=FALSE,title=FALSE,titleoutliers=FALSE){
+  hk.res <- hkmeans(dfNumScaled, k)
+  if(outliers != FALSE){
+    dfNumScaledwoOutliers <- dfNumScaled[!(row.names(dfNumScaled) %in% outliers),]
+    hk.reswoOutliers <- hkmeans(dfNumScaledwoOutliers, k)
+    plot1 <- fviz_cluster(hk.res, palette = "jco", repel = TRUE, ggtheme = theme_classic(),main = title)
+    plot2 <- fviz_cluster(hk.reswoOutliers, palette = "jco", repel = TRUE, ggtheme = theme_classic(),main = titleoutliers)
+    plot1 + plot2
+  }else{
+    fviz_cluster(hk.res, palette = "jco", repel = TRUE, ggtheme = theme_classic(),main = title)
+  }
+}
+
+```
+
+
+Funció per calcular PAM amb Gower distance (Calcul Gower distance + càlcul PAM)
+```{r message=FALSE, warning=FALSE}
+study_gow_sil <- function(dfFactor, df,mink=2, maxk=10){
+  gower_dist <- daisy(dfFactor, metric = "gower", stand=TRUE)
+  
+ # Calcula silhouette width per diferents k
+
+  sil_width <- c(NA)
+
+  for(i in mink:maxk){
+  
+  pam_fit <- pam(gower_dist, diss = TRUE, k = i)
+  
+  sil_width[i] <- pam_fit$silinfo$avg.width
+  
+  }
+
+  plot((mink-1):maxk, sil_width,
+      xlab = "Number of clusters",
+      ylab = "Silhouette Width")
+  lines((mink-1):maxk, sil_width)
+  
+  return_list=list(gower_dist,which(sil_width==max(sil_width,na.rm = T)))
+  
+  
+  return(return_list)
+}
+```
+
+
+Funció per representar PAM amb Gower distance
+
+```{r message=FALSE, warning=FALSE}
+study_pam_gow <- function(dfFactor, gow_dis,k,titulo=FALSE){
+  res.pam <- pam(gow_dis, diss = TRUE, k)
+  pam_results <- dfFactor %>%
+    mutate(cluster = res.pam$clustering) %>%
+    group_by(cluster) %>%
+    do(the_summary = summary(.))
+  pam_results$the_summary
+  if(titulo==FALSE){
+    clusplot(res.pam)
+  }else{
+    clusplot(res.pam, main = titulo)
+  }
+}
+```
+
 
 
 
@@ -773,15 +844,8 @@ boxplot(hf$time, main="Temps de seguiment")
 
 
 
-###Anàlisi de clusters amb tota la matriu
 
-
-```{r message=FALSE, warning=FALSE}
-
-head(hf)
-
-
-```
+###Preparem dades per fer anàlisi de clusters
 
 Escalem variables (a cada observació li resta la mitjana i la divideix per la desviació estandard)
 
@@ -795,9 +859,21 @@ head(hfscaled)
 ```
 
 
+S'han d'utilitzar només les variables numériques en alguns casos. Treiem les binaries.
+
+
+```{r message=FALSE, warning=FALSE}
+
+hfNscaled<-hfscaled[,-c(2,4,6,10,11,13)]
+head(hfNscaled)
+
+```
 
 
 
+
+
+###Anàlisi de clusters amb tota la matriu
 
 
 
@@ -824,15 +900,7 @@ El gràfic mostra alguns blocs més foscos a la diagonal però petits i disperso
 
 #### **1. k-means**
 
-S'han d'utilitzar només les variables numériques. Treiem les binaries.
-
-
-```{r message=FALSE, warning=FALSE}
-
-hfNscaled<-hfscaled[,-c(2,4,6,10,11,13)]
-head(hfNscaled)
-
-```
+S'utilitzen les variables nomès numèriques i escalades
 
 
 
@@ -1120,16 +1188,19 @@ randIndex(ct.km)
 Matriu numèrica i escalada
 
 **Utilitzem la funció NbClust() per calcular 30 index que ens ajudarán a obtenir el número òptim de clusters**
+
 ```{r message=FALSE, warning=FALSE}
 
-res<-NbClust(hfNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "kmeans", index = "alllong")
+#head(hfNscaled)
+
+resk<-NbClust(hfNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "kmeans", index = "alllong")
 
 
 
-barplot(table(res$Best.n[1,]),
+barplot(table(resk$Best.n[1,]),
               xlab="Numer of Clusters", ylab="Number of Criteria",
-                    main="Number of Clusters Chosen by 28 Criteria")
-table(res$Best.n[1,])
+                    main="Number of Clusters for k-means")
+table(resk$Best.n[1,])
 
 
 ```
@@ -1181,7 +1252,8 @@ ggtheme = theme_minimal()
 
 
 
-#### **2. Clustering jerarquic**
+
+#### **2.1 Clustering jerarquic - Agglomerative**
 
 Les dades han de ser numériques i han d'estar escalades:
 
@@ -1195,21 +1267,27 @@ Aplico NbClust() per veure quin k és el més adequat i on s'haurà de tallar le
 **Utilitzem la funció NbClust() per calcular 30 index que ens ajudarán a obtenir el número òptim de clusters**
 
 
+
 ```{r message=FALSE, warning=FALSE}
 
-res<-NbClust(hfNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "ward.D2", index = "alllong")
+tic("NbClust-hclust-alllong")
+reshc<-NbClust(hfNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "ward.D2", index = "alllong")
 
 
 
-barplot(table(res$Best.n[1,]),
+barplot(table(reshc$Best.n[1,]),
               xlab="Numer of Clusters", ylab="Number of Criteria",
-                    main="Number of Clusters Chosen by 30 Criteria")
-table(res$Best.n[1,])
+                    main="Number of Clusters for hclust")
 
 
+table(reshc$Best.n[1,])
+
+
+
+
+toc()
 ```
-
-
+(amb "all" surt 3 clusters)
 
 ```{r message=FALSE, warning=FALSE}
 
@@ -1770,7 +1848,96 @@ clust_stats$vi
 
 
 
-#### **3.Hierarchical + k-means **3
+
+#### **2.2 Clustering jerarquic - Divisive**
+
+Les dades han de ser numériques i han d'estar escalades
+
+
+```{r message=FALSE, warning=FALSE}
+#determinem el num de clusters
+
+fviz_nbclust(hfNscaled, FUN=hcut,method = "wss")
+fviz_nbclust(hfNscaled, FUN=hcut,method = "silhouette")
+
+fviz_gap_stat(clusGap(hfNscaled,FUN=hcut,nstart=25,K.max=10, B=50))
+
+
+
+```
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+res.hcd<-diana(hfNscaled)
+
+#divisive coefficient
+
+res.hcd$dc
+
+#dendograma
+
+pltree(res.hcd)
+
+
+```
+
+
+
+
+
+```{r message=FALSE, warning=FALSE}
+clust<-cutree(res.hcd, k=3)
+
+
+
+fviz_cluster(list(data =hf , cluster = clust),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+```
+Treiem observacions 10 i 218, valors que solen presentarse com outliers
+
+```{r message=FALSE, warning=FALSE}
+
+
+
+newhfNscaled<-hfNscaled[-c(10,218,53),]
+
+newhf<-hf[-c(10,218,53),]
+
+
+
+res.hcd.new<-diana(newhfNscaled)
+
+pltree(res.hcd.new)
+
+
+clust.new<-cutree(res.hcd.new, k=3)
+
+
+
+fviz_cluster(list(data =newhf , cluster = clust.new),
+ellipse.type = "convex", # Concentration ellipse
+repel = TRUE, # Avoid label overplotting (slow)
+show.clust.cent = FALSE, ggtheme = theme_minimal())
+
+
+
+
+
+```
+
+
+
+
+#### **3.Hierarchical + k-means **
 
 Matriu numérica i escalada
 
@@ -1799,6 +1966,8 @@ ggtheme = theme_classic())
 ```
 
 S'ha conseguit que no hi hagi solapació entre clusters.
+
+
 
 
 
@@ -1892,6 +2061,7 @@ for(c in 1:2){
 
 
 
+
 #### **5.CLARA **
 
 ```{r message=FALSE, warning=FALSE}
@@ -1925,9 +2095,12 @@ S'obtenen pitjors resultats que amb el PAM
 
 
 
+
+
 #### **6.Mixed types: Gower distance and PAM **
 
 Convertim en factor les variables binaries
+
 
 ```{r message=FALSE, warning=FALSE}
 hfF<-hf
@@ -1952,12 +2125,16 @@ Gower distance
 
 ```{r message=FALSE, warning=FALSE}
 
-gower_dist <- daisy(hfF,
-                    metric = "gower")
+gower_dist <- daisy(hfF,metric = "gower", stand=TRUE)
 
 summary(gower_dist)
 
+
+
 ```
+
+
+
 (surt el mateix resultat si faig servir la matriu inicial i si faig servir la matriu inicial escalada)
 
 
@@ -1982,11 +2159,21 @@ hfF[which(gower_mat == max(gower_mat[gower_mat != max(gower_mat)]),
 Seleccionem el numero de clusters
 
 No estic segura de si esta ben aplicat el NbClust().
+
+S'ha de fer amb la matriu numerica, la factorial no funciona.
+
+
 ```{r message=FALSE, warning=FALSE}
 
-res<-NbClust(hf, gower_dist, distance = NULL, min.nc=2, max.nc=10, method = "centroid", index = "all")
+resg<-NbClust(hf, gower_dist, distance = NULL, min.nc=2, max.nc=10, method = "centroid", index = "all")
 
-table(res$Best.n[1,])
+
+barplot(table(resg$Best.n[1,]),
+              xlab="Numer of Clusters", ylab="Number of Criteria",
+                    main="Number of Clusters for PAM-Gower")
+
+
+table(resg$Best.n[1,])
 ```
 
 
@@ -2008,7 +2195,7 @@ for(i in 2:10){
 }
 
 
-# Plot sihouette width (com més gran millor)
+# Plot silhouette width (com més gran millor)
 
 plot(1:10, sil_width,
      xlab = "Number of clusters",
@@ -2016,7 +2203,7 @@ plot(1:10, sil_width,
 lines(1:10, sil_width)
 
 ```
-Ens surten 8 clusters com a millor opció
+Ens surten 2 clusters com a millor opció
 
 calculem PAM
 k=2
@@ -2057,7 +2244,7 @@ for(c in 1:2){
 
 ```
 
-k=8
+k=8 POTSER NO CAL
 
 ```{r message=FALSE, warning=FALSE}
 
@@ -2108,6 +2295,26 @@ clusplot(res.pam)
 
 
 
+#### **Gràfic acumulat NbClust**
+
+
+```{r message=FALSE, warning=FALSE}
+
+#generem una taula amb els resultats de NbClust k-means, hclust i PAM-gower
+
+acumulat<-table(cbind(reshc$Best.n[1,],resk$Best.n[1,], resg$Best.n[1,]))
+#gràfic
+
+barplot(acumulat, xlab="Numer of Clusters", ylab="Number of Criteria",
+                    main="Number of Clusters (Acumulat)")
+
+
+```
+
+
+
+
+
 
 
 
@@ -2129,9 +2336,21 @@ clprofiles(res.prot, hf)
 
 ```
 
+
 #### **8.Model based clustering***
 
+S'ha d'utilitzar la Matriu numèrica sense escalar
+
+```{r message=FALSE, warning=FALSE}
+
+hfN<-hf[,-c(2,4,6,10,11,13)]
+
+head(hfN)
+
+```
+
 Comprovem que les variables tenen una distribució normal.
+
 CPK i Creatinina en sang son les dues variables que no tenen distribució normal
 ```{r message=FALSE, warning=FALSE}
 histogram(hf$age)
@@ -2148,15 +2367,269 @@ histogram(log(hf$creatinine_phosphokinase))
 histogram(log(hf$serum_creatinine))
 ```
 
-Matriu numerica sense escalar
+També podem aplicar el test de Shapiro-Wilk per comprovar si son o no normals
 
 ```{r message=FALSE, warning=FALSE}
 
-hfN<-hf[,-c(2,4,6,10,11,13)]
+shapiro.test(hf$age)
 
-head(hfN)
-head(hf)
+shapiro.test(hf$creatinine_phosphokinase)
+
+shapiro.test(hf$ejection_fraction)
+
+shapiro.test(hf$platelets)
+
+shapiro.test(hf$serum_creatinine)
+
+shapiro.test(hf$serum_sodium)
+
+shapiro.test(hf$time)
+
 ```
+Es descarta la normalitat per a totes les variables
+
+
+
+Convertim la matriu en logaritme per veure si es converteixen les variables en normals
+```{r message=FALSE, warning=FALSE}
+
+hfNlog<-log(hfN)
+
+ggplot(data=hfNlog, aes(hfNlog$age)) + 
+  geom_histogram()
+
+ggplot(data=hfNlog, aes(hfNlog$creatinine_phosphokinase)) + 
+  geom_histogram()
+
+ggplot(data=hfNlog, aes(hfNlog$ejection_fraction)) + 
+  geom_histogram()
+
+ggplot(data=hfNlog, aes(hfNlog$platelets)) + 
+  geom_histogram()
+
+ggplot(data=hfNlog, aes(hfNlog$serum_creatinine)) + 
+  geom_histogram()
+
+ggplot(data=hfNlog, aes(hfNlog$serum_sodium)) + 
+  geom_histogram()
+
+ggplot(data=hfNlog, aes(hfNlog$serum_sodium)) + 
+  geom_histogram()
+
+ggplot(data=hfNlog, aes(hfNlog$time)) + 
+  geom_histogram()
+
+
+#Comprovem normalitat
+
+
+shapiro.test(hfNlog$age)
+
+shapiro.test(hfNlog$creatinine_phosphokinase)
+
+shapiro.test(hfNlog$ejection_fraction)
+
+shapiro.test(hfNlog$platelets)
+
+shapiro.test(hfNlog$serum_creatinine)
+
+shapiro.test(hfNlog$serum_sodium)
+
+shapiro.test(hfNlog$time)
+
+
+
+#Normal probability plots
+
+qqnorm(hfNlog$age, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfNlog$age)
+
+qqnorm(hfNlog$creatinine_phosphokinase, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfNlog$creatinine_phosphokinase)
+
+
+qqnorm(hfNlog$ejection_fraction, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfNlog$ejection_fraction)
+
+
+
+qqnorm(hfNlog$platelets, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfNlog$platelets)
+
+
+qqnorm(hfNlog$serum_creatinine, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfNlog$serum_creatinine)
+
+
+qqnorm(hfNlog$serum_sodium, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfNlog$serum_sodium)
+
+
+qqnorm(hfNlog$time, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfNlog$time)
+
+```
+Es descarta la normalitat amb la matriu logaritmica 
+
+Comprovem quina trasformació és mès adequada per a cada variable amb la funció bestNormalize().
+
+```{r message=FALSE, warning=FALSE}
+
+hfnorm<-hfN
+head(hfnorm)
+
+
+#Age
+set.seed(67637)
+bestNormalize(hf$age) #orderNorm
+norm_age<-orderNorm(hf$age)
+hfnorm$age<-norm_age$x.t
+
+
+shapiro.test(hfnorm$age) 
+qqnorm(hfnorm$age, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfnorm$age)
+
+#S'ha normalitzat
+
+
+
+#creatinine_phosphokinase
+
+set.seed(67637)
+bestNormalize(hf$creatinine_phosphokinase) #orderNorm
+norm_cpk<-orderNorm(hf$creatinine_phosphokinase)
+hfnorm$creatinine_phosphokinase<-norm_cpk$x.t
+
+shapiro.test(hfnorm$creatinine_phosphokinase) 
+qqnorm(hfnorm$creatinine_phosphokinase, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfnorm$creatinine_phosphokinase)
+
+#S'ha normalitzat
+
+
+#ejection_fraction
+set.seed(67637)
+bestNormalize(hf$ejection_fraction)#orderNorm
+
+norm_ef<-orderNorm(hf$ejection_fraction)
+hfnorm$ejection_fraction<-norm_ef$x.t
+
+shapiro.test(hfnorm$ejection_fraction) 
+qqnorm(hfnorm$ejection_fraction, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfnorm$ejection_fraction)
+
+histogram(hfnorm$ejection_fraction, main="Ejection Fraction")
+
+
+#No s'ha normalitzat, S'ha de factoritzar?
+
+
+#platelets
+set.seed(67637)
+bestNormalize(hf$platelets) #orderNorm
+
+norm_plat<-orderNorm(hf$platelets)
+hfnorm$platelets<-norm_plat$x.t
+
+shapiro.test(hfnorm$platelets) 
+qqnorm(hfnorm$platelets, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfnorm$platelets)
+
+#S'ha normalitzat
+
+
+#serum_creatinine
+set.seed(67637)
+bestNormalize(hf$serum_creatinine)#orderNorm
+
+norm_sc<-orderNorm(hf$serum_creatinine)
+hfnorm$serum_creatinine<-norm_sc$x.t
+
+shapiro.test(hfnorm$serum_creatinine) 
+qqnorm(hfnorm$serum_creatinine, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfnorm$serum_creatinine)
+
+
+histogram(hfnorm$serum_creatinine, main="Serum Creatinine")
+
+#No s'ha normalitzat, esta al limit
+
+
+#serum_sodium
+set.seed(67637)
+bestNormalize(hf$serum_sodium)
+
+norm_ss<-sqrt_x(hf$serum_sodium)
+hfnorm$serum_sodium<-norm_ss$x.t
+
+shapiro.test(hfnorm$serum_sodium) 
+qqnorm(hfnorm$serum_sodium, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfnorm$serum_sodium)
+
+histogram(hfnorm$serum_sodium, main="serum sodium")
+#No s'ha normalitzat
+
+
+norm_ss2<-orderNorm(hf$serum_sodium)
+hfnorm$serum_sodium<-norm_ss2$x.t
+
+shapiro.test(hfnorm$serum_sodium) 
+qqnorm(hfnorm$serum_sodium, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfnorm$serum_sodium)
+
+histogram(hfnorm$serum_sodium, main="Serum sodium")
+
+#S'ha normalitzat
+
+
+#time
+set.seed(67637)
+bestNormalize(hf$time)
+
+norm_t<-orderNorm(hf$time)
+hfnorm$time<-norm_t$x.t
+
+shapiro.test(hfnorm$time) 
+qqnorm(hfnorm$time, 
+  ylab="Standardized Residuals", 
+  xlab="Normal Scores") 
+qqline(hfnorm$time)
+
+#S'ha normalitzat
+
+
+
+```
+
 
 Calcul dels models
 ```{r message=FALSE, warning=FALSE}
@@ -2164,16 +2637,28 @@ Calcul dels models
 res.mc <- Mclust(hfN, G = NULL)
 
 
-res.mc1 <- Mclust(hfNscaled, G = NULL)
+#No fa falta escalar res.mc1 <- Mclust(hfNscaled, G = NULL)
 
 
-res.mc2 <- Mclust(hf, G = NULL)
+#No es pot  res.mc2 <- Mclust(hf, G = NULL)
 
 
 
 #2 clusters per comparar amb els altres
 
 res.mc3 <- Mclust(hfNscaled, G = 2)
+
+
+#matriu numèrica logarítmica
+res.mc4 <- Mclust(hfNlog, G = NULL)
+
+
+#matriu numèrica normalitzada
+
+head(hfnorm)
+
+res.mc5 <- Mclust(hfnorm, G = NULL)
+
 
 
 ```
@@ -2189,21 +2674,18 @@ plot(res.mc, what = "uncertainty")
 
 summary(res.mc$BIC)
 
-#variables numeriques escalades
 
-summary(res.mc1)
-plot(res.mc1, what = "density")
-plot(res.mc1, what = "uncertainty")
 
-plot(res.mc1, what = "BIC")
+#variables numeriques escalades - No fa falta escalar
 
-summary(res.mc1$BIC)
+#summary(res.mc1)
+#plot(res.mc1, what = "density")
+#plot(res.mc1, what = "uncertainty")
 
-#tota la matriu
+#plot(res.mc1, what = "BIC")
 
-summary(res.mc2)
-plot(res.mc2, what = "density")
-plot(res.mc2, what = "uncertainty")
+#summary(res.mc1$BIC)
+
 
 
 #pel calcul amb 2 clusters - NO S'OBTENEN BONS RESULTATS
@@ -2213,7 +2695,32 @@ table(hf$DEATH_EVENT, res.mc3$classification)
 table(hf$sex, res.mc3$classification)
 
 
+#matriu numèrica logarítmica
+summary(res.mc4)
+plot(res.mc4, what = "density")
+plot(res.mc4, what = "uncertainty")
+
+summary(res.mc4$BIC)
+
+
+#matriu numèrica normalitzada
+
+res.mc5 <- Mclust(hfnorm, G = NULL)
+
+summary(res.mc5)
+plot(res.mc5, what = "density")
+plot(res.mc5, what = "uncertainty")
+
+summary(res.mc5$BIC)
+
+
+
+
+
+
+
 ```
+
 
 ```{r message=FALSE, warning=FALSE}
 
@@ -2224,7 +2731,8 @@ plot(res.mc1, what = 'BIC', legendArgs = legend_args)
 legend_args <- list(x = "center", ncol = 5)
 plot(res.mc2, what = 'BIC', legendArgs = legend_args)
 
-
+legend_args <- list(x = "center", ncol = 5)
+plot(res.mc5, what = 'BIC', legendArgs = legend_args)
 
 
 ```
@@ -2247,6 +2755,12 @@ summary(res.mcdr3)
 
 
 
+res.mcdr5 <- MclustDR(res.mc5, lambda = 1)
+
+summary(res.mcdr5)
+
+
+
 ```
 
 ```{r message=FALSE, warning=FALSE}
@@ -2256,11 +2770,16 @@ plot(res.mcdr1, what = "contour")
 
 plot(res.mcdr3, what = "contour")
 
+plot(res.mcdr5, what = "contour")
+
+
 
 
 plot(res.mcdr1, what = "boundaries", ngrid = 200)
 
 plot(res.mcdr3, what = "boundaries", ngrid = 200)
+
+plot(res.mcdr5, what = "boundaries", ngrid = 200)
 
 
 ```
@@ -2269,34 +2788,29 @@ Convertim en logaritme CPK i Creatinina en sang
 
 ```{r message=FALSE, warning=FALSE}
 
+hfNlog2<-hfN
 
-
-hfNlog<-hfN
-
-hfNlog$creatinine_phosphokinase<-log(hfNlog$creatinine_phosphokinase)
-hfNlog$serum_creatinine<-log(hfNlog$serum_sodium)
-
-head(hfNlog)
-
-head(hfN)
+hfNlog2$creatinine_phosphokinase<-log(hfNlog$creatinine_phosphokinase)
+hfNlog2$serum_creatinine<-log(hfNlog$serum_sodium)
 
 
 ```
 
 ```{r message=FALSE, warning=FALSE}
 
-res.mc4 <- Mclust(hfNlog, G = NULL)
+res.mc6 <- Mclust(hfNlog2, G = NULL)
 
-summary(res.mc4)
-plot(res.mc4, what = "density")
-plot(res.mc4, what = "uncertainty")
+summary(res.mc6)
+plot(res.mc6, what = "density")
+plot(res.mc6, what = "uncertainty")
 
-plot(res.mc4, what = "BIC")
+plot(res.mc6, what = "BIC")
 
-summary(res.mc4$BIC)
+summary(res.mc6$BIC)
 
 
 ```
+
 
 
 
@@ -2346,16 +2860,21 @@ ggtheme = theme_minimal())
 
 
 
+
 ###Anàlisi de clusters estratificat
 
-Homes/Dones
+
+####**Homes/Dones**
+
+
+
+Construcció matrius 
+
 ```{r message=FALSE, warning=FALSE}
 hfH<-hf[hf$sex==1,]
 
 hfD<-hf[hf$sex==0,]
 
-head(hfH)
-dim(hfD)
 
 ```
 
@@ -2388,8 +2907,11 @@ table(res$Best.n[1,])
 
 ```{r message=FALSE, warning=FALSE}
 
+tic()
+
 res<-NbClust(hfHNscaled, diss=NULL, distance = "euclidean", min.nc=2, max.nc=10, method = "kmeans", index = "alllong")
 
+toc()
 
 
 barplot(table(res$Best.n[1,]),
@@ -2400,13 +2922,229 @@ table(res$Best.n[1,])
 
 ```
 
+k-means k = 2
+
+```{r message=FALSE, warning=FALSE}
+
+#K-means algorithm
+
+km.resDNs <-eclust(hfDNscaled, "kmeans", k=2, nstart=50, graph = F )
+
+#Clustering visualization
+
+fviz_cluster(km.resDNs, geom = "point", ellipse.type = "norm", palette= "jco", ggtheme = theme_minimal())
+```
+
+pam k = 2
+
+```{r message=FALSE, warning=FALSE}
+
+#pam algorithm
+
+pam.resDNs<-eclust(hfDNscaled, "pam", k=2, nstart=50, graph = F )
+
+#Clustering visualization
+
+fviz_cluster(pam.resDNs, geom = "point", ellipse.type = "norm", palette= "jco", ggtheme = theme_minimal())
+```
+
+
+
+
+
+
+
+
+Per homes
+
+**hkmeans**
+
+```{r message=FALSE, warning=FALSE}
+
+#K-means algorithm
+
+# Treiem posible outlier
+
+hfHNscaledwoOutliers <- hfHNscaled[!(row.names(hfHNscaled) %in% c("10")),]
+
+hk.resHNs1 <- hkmeans(hfHNscaledwoOutliers, k=2)
+hk.resHNs2 <- hkmeans(hfHNscaled, k=2)
+
+
+#Clustering visualization
+
+plothk.resHNs1 <- fviz_cluster(hk.resHNs1, palette = "jco", repel = TRUE, ggtheme = theme_classic(),main = "Homes sense obs. 10")
+plothk.resHNs2 <- fviz_cluster(hk.resHNs2, palette = "jco", repel = TRUE, ggtheme = theme_classic(),main = "Homes")
+
+
+
+```
+
+Per dones
+
+**hkmeans**
+
+```{r message=FALSE, warning=FALSE}
+
+#K-means algorithm
+
+# Treiem posibles outliers
+
+hfDNscaledwoOutliers <- hfDNscaled[!(row.names(hfDNscaled) %in% c("53","218")),]
+
+hk.resDNs1 <- hkmeans(hfDNscaledwoOutliers, k=2)
+hk.resDNs2 <- hkmeans(hfDNscaled, k=2)
+
+
+#Clustering visualization
+
+plothk.resDNs1 <- fviz_cluster(hk.resDNs1, palette = "jco", repel = TRUE, ggtheme = theme_classic(),main = "Dones sense obs. 53 and 218")
+plothk.resDNs2 <- fviz_cluster(hk.resDNs2, palette = "jco", repel = TRUE, ggtheme = theme_classic(),main = "Dones",)
+
+
+#Funció que calcula hkmeans i mostra el resultat
+
+study_hkmeans(hfDNscaled,2,c("53","218"),title = "Dones",titleoutliers = "Dones sense obs. 53 i 218")
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+
+plothk.resDNs1 + plothk.resHNs2
+
+```
+
+
+
+
+####**Morts/Vius**
+
+```{r message=FALSE, warning=FALSE}
+
+#morts
+hfM<-hf[hf$DEATH_EVENT==1,]
+#vius
+hfV<-hf[hf$DEATH_EVENT==0,]
+
+hfMNscaled<- scale(hfM[,-c(2,4,6,10,11,13)])
+
+hfVNscaled<- scale(hfV[,-c(2,4,6,10,11,13)])
+
+
+#Funció que calcula hkmeans i mostra el resultat
+study_hkmeans(hfMNscaled,2,title = "Morts")
+
+study_hkmeans(hfVNscaled,2,title = "Vius")
+
+
+```
+
+
+####***EF estratificat***
 
 
 
 ```{r message=FALSE, warning=FALSE}
 
+#construim matriu amb la variable EF estratificada segons classificació AHA
+
+hfEF<-hf
+
+hfEF$ejection_fraction <-replace(hfEF$ejection_fraction,hfEF$ejection_fraction>=50,"Normal")
+hfEF$ejection_fraction <-replace(hfEF$ejection_fraction,(hfEF$ejection_fraction>=41 & hfEF$ejection_fraction<50),"Limit")
+hfEF$ejection_fraction <-replace(hfEF$ejection_fraction,hfEF$ejection_fraction<41,"Reduida")
+
+hfEFNormal<-hfEF[hfEF$ejection_fraction == "Normal",]
+hfEFLimit<-hfEF[hfEF$ejection_fraction == "Limit",]
+hfEFReduida<-hfEF[hfEF$ejection_fraction == "Reduida",]
+
+hfEFNormalNscaled <- scale(hfEFNormal[,-c(2,4,5,6,10,11,13)])
+
+hfEFLimitNscaled <- scale(hfEFLimit[,-c(2,4,5,6,10,11,13)])
+
+hfEFReduidaNscaled <- scale(hfEFReduida[,-c(2,4,5,6,10,11,13)])
+
+
+#Funció que calcula hkmeans i mostra el resultat
+
+study_hkmeans(hfEFNormalNscaled,2,title = "EF Normal > 50",titleoutliers = "EF Normal > 50 w/o obs. 53 and 218" ,outliers = c("53","218"))
+
+study_hkmeans(hfEFLimitNscaled,2,title = "EF Limit entre 41 i 50")
+
+study_hkmeans(hfEFReduidaNscaled,2,title = "EF Reduida < 41")
+
+study_hkmeans(hfEFReduidaNscaled,2,title = "EF Reduida < 41",titleoutliers = "EF Reduida < 41 w/o obs. 10" ,outliers = c("10"))
 
 ```
+
+####**Anàlisi matriu factoritzada (Gower distance)**
+
+####**Homes/Dones**
+
+```{r message=FALSE, warning=FALSE}
+#Tornem a construir les matrius a partir de la factoritzada (variables binàries com a factor per poder calcular la distancia de Gower)
+
+hfFH<-hfF[hfF$sex==1,]
+hfFD<-hfF[hfF$sex==0,]
+
+hfH<-hf[hf$sex==1,]
+hfD<-hf[hf$sex==0,]
+
+#Eliminem la variable estratificada
+
+hfFHwoSex = subset(hfFH,select=-c(sex))
+hfHwoSex = subset(hfH,select=-c(sex))
+
+hfFDwoSex = subset(hfFD,select=-c(sex))
+hfDwoSex = subset(hfD,select=-c(sex))
+
+res.study <- study_gow_sil(hfFHwoSex,hfHwoSex,mink = 2,maxk = 10)
+
+#gow.dis.d <- study_go_nbc(hfFDwoSex,hfDwoSex) NO FUNCIONA, MATRIU SINGULAR (ILL CONDITIONED)
+
+##Funció que calcula PAM amb Gower distance i mostra el resultat
+
+study_pam_gow(hfFHwoSex,res.study[[1]],k = res.study[[2]],titulo = "PAM GOWER Factor Homes")
+
+
+```
+
+
+####**Vius/Morts**
+
+```{r message=FALSE, warning=FALSE}
+#Tornem a construir les matrius a partir de la factoritzada (variables binàries com a factor per poder calcular la distancia de Gower)
+
+hfFM<-hfF[hfF$DEATH_EVENT==1,]
+hfFV<-hfF[hfF$DEATH_EVENT==0,]
+
+hfM<-hf[hf$DEATH_EVENT==1,]
+hfV<-hf[hf$DEATH_EVENT==0,]
+
+
+#Eliminem la variable estratificada
+hfFMwoDE = subset(hfFM,select=-c(DEATH_EVENT))
+hfMwoDE = subset(hfM,select=-c(DEATH_EVENT))
+
+hfFVwoDE = subset(hfFV,select=-c(DEATH_EVENT))
+hfVwoDE = subset(hfV,select=-c(DEATH_EVENT))
+
+
+
+
+
+res.m <- study_gow_sil(hfFMwoDE,hfMwoDE, 2, 10)
+res.v <- study_gow_sil(hfFVwoDE,hfVwoDE, 2, 10)
+
+study_pam_gow(hfFMwoDE,res.m[[1]],k = res.v[[2]],titulo = "PAM GOWER Factor Morts")
+study_pam_gow(hfFVwoDE,res.v[[1]],k = res.v[[2]],titulo = "PAM GOWER Factor Vius")
+
+
+```
+
+
+
 
 
 
